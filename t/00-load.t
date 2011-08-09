@@ -3,7 +3,7 @@
 use Test::More tests => 1;
 
 BEGIN {
-    my $gittestdir = '1/00-load.git';
+    my $gittestdir = 't/00-load.git';
 
     # remove artifacts from previous run
     use Path::Class;
