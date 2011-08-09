@@ -227,7 +227,7 @@ sub get {
     }
 }
 
-=head2 listattr()
+=head2 listattr( LOCATION [, VERSION ] )
 
 This fetches a list of the parameters available for a given location in the 
 configuration tree.
@@ -237,9 +237,25 @@ configuration tree.
 sub listattr {
     my $self     = shift;
     my $location = shift;
+    my $version  = shift;
 
-    my ( $sect, $key ) = $self->_get_sect_key($location);
-    return keys %{ $Config::versioned{ $sect . $delimiter . $key } };
+    if ( $self->{prefix} ) {
+        $location = $self->{prefix} . $delimiter . $location;
+    }
+
+    my $obj = $self->_findobj( $location, $version );
+    if ( $obj and $obj->kind eq 'tree' ) {
+        my @entries = $obj->directory_entries;
+        my @ret     = ();
+        foreach my $de (@entries) {
+            push @ret, $de->filename;
+        }
+        return @ret;
+    }
+    else {
+        $@ = "obj at $location not found";
+        return;
+    }
 }
 
 =head2 version
