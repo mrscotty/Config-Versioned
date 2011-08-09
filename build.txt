@@ -1,0 +1,14 @@
+To create a new dist package
+
+  perl Makefile.PL
+  make manifest
+  make dist
+  make disttest
+
+When done, run:
+
+  make distclean
+
+    or
+
+  make veryclean
