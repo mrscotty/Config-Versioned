@@ -5,15 +5,15 @@
 ##
 ## vim: syntax=perl
 
-use Test::More tests => 18;
+use Test::More tests => 21;
 
 use strict;
 use warnings;
 my $gittestdir = qw( t/01-initdb.git );
 
-my $ver1 = 'ae24d118a90209fda5e7fede3dcc014f7adabdc8';
-my $ver2 = '21d42c623f91517ef2a4a460ae2676214d9159d2';
-my $ver3 = 'a02944a0203f659cfb951e700ff59dff7ef0af7a';
+my $ver1 = 'bcd156cb443a8812f444015053cadf3f1f55cc1a';
+my $ver2 = 'bde0ab785072417fa506de689ae2620ad004e649';
+my $ver3 = '1a63c13cc7918128e8a5ffba6d6fb82ca068bbf7';
 
 BEGIN {
     my $gittestdir = qw( t/01-initdb.git );
@@ -45,7 +45,16 @@ BEGIN {
 
 my $cfg = Config::Versioned->new();
 ok( $cfg, 'create new config instance' );
+
+# Internals: check that the head really points to a commit object
+is( $Config::Versioned::git->head->kind, 'commit', 'head should be a commit' );
+
 is( $cfg->version, $ver1, 'check version (sha1 hash) of first commit' );
+
+# force a re-load of the configuration file we already used to ensure
+# that we don't add a commit when there were no changes
+$cfg->_import_cfg();
+is( $cfg->version, $ver1, 're-import should not create new commit' );
 
 # check the internal helper functions
 my ( $s1, $k1 ) = $cfg->_get_sect_key('group1.ldap');
@@ -69,30 +78,28 @@ is( $cfg->get('group1.ldap1.uri'),
 my $cfg2 = Config::Versioned->new( prefix => 'group2' );
 ok( $cfg2, 'create new config instance with prefix' );
 
+is( $cfg2->{prefix}, 'group2', 'check internal hash for prefix');
+
 is( $cfg2->get('ldap.uri'),
     'ldaps://example.org', "check single attribute with prefix" );
 
 $cfg->_import_cfg(
-    {
         filename    => '01-initdb-2.conf',
         path        => [qw( t )],
         commit_time => DateTime->from_epoch( epoch => 1240351682 ),
         author_name => 'Test User',
         author_mail => 'test@example.com',
-    }
 );
-is( $cfg->version, $ver2, 'check  version of second commit' );
+is( $cfg->version, $ver2, 'check version of second commit' );
 
 $cfg->_import_cfg(
-    {
         filename    => '01-initdb-3.conf',
         path        => [qw( t )],
         commit_time => DateTime->from_epoch( epoch => 1240361682 ),
         author_name => 'Test User',
         author_mail => 'test@example.com',
-    }
 );
-is( $cfg->version, $ver3, 'check  version of third commit' );
+is( $cfg->version, $ver3, 'check version of third commit' );
 
 # Try to get different versions of some values
 is( $cfg->get('group2.ldap2.user'),

@@ -108,7 +108,8 @@ Specifies the name of the configuration file to be found in the given path.
 
  filename => qw( yourapp.conf ),
 
-The default filename is "cfgver.conf".
+If no filename is given, no new configuration data will be imported and
+the internal git repository will be used.
 
 =item dbpath
 
@@ -152,25 +153,42 @@ requests to a specific node.
 
 sub new {
     my ($this) = shift;
-    my $class = ref($this) || $this;
-    my $self = {};
-    my $init_args;
-    if ( ref( $_[0] ) eq 'HASH' ) {
-        $init_args = shift;
-    }
-    else {
-        $init_args = {@_};
-    }
-    $self->{init_args} = $init_args;
-    $self->{argv}      = [@ARGV];
-    $self->{options}   = [];
+    my $class  = ref($this) || $this;
+    my $self   = {};
+    my %params = @_;
+
+    #    warn "# new() called with params: ", join(', ', %params), "\n";
     bless $self, $class;
 
-    # process args
+    my $init_args = $Config::Versioned::init_args;
+
+    # process class args
+    foreach my $key (
+        qw( path filename dbpath directory autocreate author_name author_mail commit_time )
+      )
+    {
+        if ( exists $params{$key} ) {
+            $init_args->{$key} = $params{$key};
+        }
+    }
+    $self->{init_args} = $init_args;    # deprecated?!?
+
+    # process instance args
 
     foreach my $key (qw( prefix )) {
-        $self->{$key} = $init_args->{$key};
+        if ( exists $params{$key} ) {
+            $self->{$key} = $params{$key};
+        }
     }
+
+    if ( not defined $Config::Versioned::git ) {
+        $self->_init_repo($init_args);
+    }
+
+    if ( $init_args->{filename} ) {
+        $self->_import_cfg( %{$init_args} );
+    }
+
     return ($self);
 }
 
@@ -268,7 +286,7 @@ happens to be the SHA1 hash of the HEAD of the internal git repository.
 sub version {
     my $self = shift;
 
-    my $head = $Config::versioned->head;
+    my $head = $Config::Versioned::git->head;
     return $head->sha1;
 }
 
@@ -296,40 +314,13 @@ sub _import {
     # We only do this once (the default Config::Versioned option processor
     # is a singleton)
 
-    if ( !$default_option_processor ) {
-
-        # can supply initial hashref to use for option values instead of
-        # global %App::options
-
-        my $values =
-          ( $#args > -1 && ref( $args[0] ) eq "HASH" )
-          ? shift(@args)
-          : \$Config::versioned;
+    if ( not $Config::Versioned::init_args ) {
 
         if ( not( $#args % 2 == 1 ) ) {
             croak
 "Config::Versioned::import(): must have an even number of vars/values for named args";
         }
         my $init_args = {@args};
-
-   # "values" in named arg list overrides the one supplied as an initial hashref
-
-        if ( defined $init_args->{values} ) {
-            ( ref( $init_args->{values} ) eq "HASH" )
-              || croak
-              "Config::Versioned->new(): 'values' arg must be a hash reference";
-            $values = $init_args->{values};
-        }
-
-        my $option_processor = $class->new($init_args);
-        $default_option_processor =
-          $option_processor;    # save it in the singleton location
-
-  #        $option_processor->_read_options($values)
-  #          ;                     # read in all the options from various places
-
-        $option_processor->{values} =
-          $values;              # store it for future (currently undefined) uses
 
         if ( not defined $init_args->{path} ) {
             $init_args->{path} = [qw( . )];
@@ -338,28 +329,46 @@ sub _import {
             croak "Config::Versioned 'path' must be a reference to an ARRAY";
         }
 
-        if ( not $init_args->{filename} ) {
-            $init_args->{filename} = 'cfgver.conf';
-        }
+        #        if ( not $init_args->{filename} ) {
+        #            $init_args->{filename} = 'cfgver.conf';
+        #        }
 
         if ( not $init_args->{dbpath} ) {
             $init_args->{dbpath} = 'cfgver.git';
         }
 
-        my $git;
-        if ( not -d $init_args->{dbpath} ) {
-            dir( $init_args->{dbpath} )->mkpath;
-            $git = Git::PurePerl->init( gitdir => $init_args->{dbpath} );
-        }
-        else {
-            $git = Git::PurePerl->new( directory => $init_args->{dbpath} );
-        }
+        $Config::Versioned::init_args = $init_args;
 
-        $Config::versioned = $git;
-
-        $class->_import_cfg($init_args);
+        #        my $option_processor = $class->new($init_args);
+        #
+        #$default_option_processor =
+        #  $option_processor;    # save it in the singleton location
 
     }
+}
+
+=head2 _init_repo INITARGS
+
+=cut
+
+sub _init_repo {
+    my $self      = shift;
+    my $init_args = shift;
+
+    my $git;
+    if ( not $init_args->{dbpath} ) {
+        die "ERROR: dbpath not set";
+    }
+
+    if ( not -d $init_args->{dbpath} ) {
+        dir( $init_args->{dbpath} )->mkpath;
+        $git = Git::PurePerl->init( gitdir => $init_args->{dbpath} );
+    }
+    else {
+        $git = Git::PurePerl->new( gitdir => $init_args->{dbpath} );
+    }
+    $Config::Versioned::git = $git;
+
 }
 
 =head2 _import_cfg INITARGS
@@ -369,14 +378,23 @@ Imports the configuration read and writes it to the internal database.
 =cut
 
 sub _import_cfg {
-    my $self      = shift;
-    my $init_args = shift;
+    my $self   = shift;
+    my %params = @_;
+
+    my $init_args = $Config::Versioned::init_args;
+
+    foreach my $key ( keys %params ) {
+        $init_args->{$key} = $params{$key};
+    }
 
     # Read the configuration from the import files
 
     my %tmpcfg = ();
-    $default_option_processor->_read_config_path( $init_args->{filename},
+    $self->_read_config_path( $init_args->{filename},
         \%tmpcfg, @{ $init_args->{path} } );
+
+    my $comment = "Import config from "
+      . $self->_which( $init_args->{filename}, @{ $init_args->{path} } );
 
     # convert the foreign data structure to a simple hash tree,
     # where the value is either a scalar or a hash reference.
@@ -402,16 +420,34 @@ sub _import_cfg {
     }
 
     my $parent = undef;
+    my $master = undef;
 
-    if ( $Config::versioned->all_sha1s->all ) {
-        my $master = $Config::versioned->ref('refs/heads/master');
+    if ( $Config::Versioned::git->all_sha1s->all ) {
+        $master = $Config::Versioned::git->ref('refs/heads/master');
         if ( not $master ) {
             die "ERR: no master object found";
         }
         $parent = $master->sha1;
     }
 
-    my $tree  = $self->_hash2tree($tmphash);
+    #    warn "# author_name: ", $init_args->{author_name}, "\n";
+    my $tree = $self->_hash2tree($tmphash);
+
+    #
+    # Now that we have a "staging" tree, compare its hash with
+    # that of the current top-level tree. If they are the same,
+    # there were no changes made to the config and we should
+    # not create a commit object
+    #
+
+    if ( $parent and $master->tree->sha1 eq $tree->sha1 ) {
+        return;
+    }
+
+    #
+    # Prepare and execute the commit
+    #
+
     my $actor = Git::PurePerl::Actor->new(
         name  => $init_args->{author_name} || "process: $0",
         email => $init_args->{author_mail} || $ENV{USER} . '@localhost',
@@ -425,14 +461,14 @@ sub _import_cfg {
         authored_time  => $time,
         committer      => $actor,
         committed_time => $time,
-        comment        => 'import configuration',
+        comment        => $comment,
     );
     if ($parent) {
         push @commit_attrs, parent => $parent;
     }
 
     my $commit = Git::PurePerl::NewObject::Commit->new(@commit_attrs);
-    $Config::versioned->put_object($commit);
+    $Config::Versioned::git->put_object($commit);
 
 }
 
@@ -459,7 +495,7 @@ sub _hash2tree {
         else {
             my $obj =
               Git::PurePerl::NewObject::Blob->new( content => $hash->{$key} );
-            $Config::versioned->put_object($obj);
+            $Config::Versioned::git->put_object($obj);
             my $de = Git::PurePerl::NewDirectoryEntry->new(
                 mode     => '100644',
                 filename => $key,
@@ -471,7 +507,7 @@ sub _hash2tree {
     my $tree =
       Git::PurePerl::NewObject::Tree->new(
         directory_entries => [@dir_entries] );
-    $Config::versioned->put_object($tree);
+    $Config::Versioned::git->put_object($tree);
 
     return $tree;
 }
@@ -487,7 +523,7 @@ A reference to the node at the LOCATION is returned.
 sub _mknode {
     my $self     = shift;
     my $location = shift;
-    my $ref      = $Config::versioned;
+    my $ref      = $Config::Versioned::git;
     foreach my $key ( split( /\./, $location ) ) {
         if ( not exists $ref->{$key} ) {
             $ref->{$key} = {};
@@ -515,13 +551,13 @@ sub _findobj {
     my $self     = shift;
     my $location = shift;
     my $ver      = shift;
-    my $cfg      = $Config::versioned;
+    my $cfg      = $Config::Versioned::git;
 
     # If no version hash was given, default to the HEAD of master
 
     if ( not $ver ) {
-        if ( $Config::versioned->all_sha1s->all ) {
-            my $master = $Config::versioned->ref('refs/heads/master');
+        if ( $Config::Versioned::git->all_sha1s->all ) {
+            my $master = $Config::Versioned::git->ref('refs/heads/master');
             if ( not $master ) {
                 die "ERR: no master object found";
             }
