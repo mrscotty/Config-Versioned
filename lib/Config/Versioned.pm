@@ -180,7 +180,7 @@ sub new {
 
     # process instance args
 
-    foreach my $key (qw( prefix )) {
+    foreach my $key (qw( prefix commit_time author_name author_mail )) {
         if ( exists $params{$key} ) {
             $self->{$key} = $params{$key};
         }
