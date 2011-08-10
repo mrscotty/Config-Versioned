@@ -1,0 +1,19 @@
+# Version control
+\B\.git\b
+^\.gitignore$
+
+# Makemaker generated files and dirs
+^MANIFEST\.
+^Makefile$
+^blib/
+^MakeMaker-\d
+
+# Temp files from t/
+t/01-initdb.git/
+
+# Temp, old, and backup files
+~$
+\.swp$
+\.old$
+\.bak$
+^Config-Versioned
