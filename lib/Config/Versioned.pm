@@ -31,7 +31,8 @@ use DateTime;
 use Git::PurePerl;
 use Path::Class;
 
-my $delimiter = '.';
+my $delimiter = '.';    # NOTE: in the regexes, the dot is hardcoded
+my $debug     = 0;
 
 # a reference to the singleton Config::Versioned object that parsed the command line
 my ($default_option_processor);
@@ -157,7 +158,11 @@ sub new {
     my $self   = {};
     my %params = @_;
 
-    #    warn "# new() called with params: ", join(', ', %params), "\n";
+    warn "# new() called with params: ", join( ', ', %params ), "\n" if $debug;
+    $Config::Versioned::init_args ||= {};
+    warn "# new() called with init_args: ",
+      join( ', ', %{$Config::Versioned::init_args} ), "\n"
+      if $debug;
     bless $self, $class;
 
     my $init_args = $Config::Versioned::init_args;
