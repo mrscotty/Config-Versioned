@@ -1,3 +1,11 @@
+These are just my notes on building, testing and distributing this module.
+Your mileage may vary.
+
+Installing a test version locally
+
+  perl Makefile.PL PREFIX=$HOME/perllib && make test && make install
+  make clean
+
 To create a new dist package
 
   perl Makefile.PL
@@ -12,3 +20,20 @@ When done, run:
     or
 
   make veryclean
+
+Pushing CPAN modules from Github to CPAN
+(from http://blog.usarundbrief.com/?p=36)
+
+- Check that Makefile.PL, META.yml and MANIFEST are in the top directory
+
+- Tag the release and push the tag to github
+
+    git tag rel_001
+    git push -tags
+
+- At PAUSE (https://pause.perl.org/pause/authenquery?ACTION=add_uri), enter
+the URL and click on "Upload this URL"
+
+    http://github.com/mrscotty/Config-Versioned/tarball/rel_001/Config-Versioned-0.01.tgz
+
+
