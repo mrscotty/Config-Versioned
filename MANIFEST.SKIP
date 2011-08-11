@@ -9,7 +9,7 @@
 ^MakeMaker-\d
 
 # Temp files from t/
-t/01-initdb.git/
+t/.*\.git/
 
 # Temp, old, and backup files
 ~$
