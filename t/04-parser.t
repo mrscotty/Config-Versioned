@@ -1,0 +1,63 @@
+# t/04-parser.t
+#
+# This test script is for the optional external parsing of foreign
+# configuration files.
+#
+# vim: syntax=perl
+
+use Test::More tests => 2;
+use DateTime;
+use Path::Class;
+
+my $ver1 = '89ea7aaa3e2f3988ccefc071687f2720619e7357';
+
+our $gitdb = 't/04-parser.git';
+dir($gitdb)->rmtree;
+
+package MyConfig;
+
+use base qw( Config::Versioned );
+
+sub new {
+    my ($this) = shift;
+    my $class = ref($this) || $this;
+
+    $this->SUPER::new(
+        dbpath      => $gitdb,
+        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+        author_name => 'Test User',
+        author_mail => 'test@example.com',
+    );
+}
+
+sub parser {
+    my $self = shift;
+
+    my $cfg = {
+        group1 => {
+            subgroup1 => {
+                param1 => 'val1',
+                param2 => 'val2',
+            },
+        },
+        group2 => {
+            subgroup1 => {
+                param3 => 'val3',
+                param4 => 'val4',
+            },
+        },
+    };
+
+    # pass original params, appended with a comment string for the commit
+    $self->commit( $cfg, @_, comment => 'import from my perl hash' );
+
+}
+
+package main;
+
+#use_ok( 'MyConfig' );
+my $cfg = MyConfig->new();
+ok( $cfg, 'created MyConfig instance with parser' );
+is( $cfg->version, $ver1, 'check version of HEAD' );
+
+#diag("Testing Config::Versioned $Config::Versioned::VERSION, Perl $], $^X");

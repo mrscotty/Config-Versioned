@@ -190,9 +190,7 @@ sub new {
         $self->_init_repo($init_args);
     }
 
-    if ( $init_args->{filename} ) {
-        $self->_import_cfg( %{$init_args} );
-    }
+    my $cfghash = $self->parser( %{$init_args} );
 
     return ($self);
 }
@@ -378,34 +376,85 @@ sub _init_repo {
 
 =head2 _import_cfg INITARGS
 
-Imports the configuration read and writes it to the internal database.
+This wrapper calls parser() and is provided for
+backward compatibility.
 
 =cut
 
 sub _import_cfg {
+    my $self    = shift;
+    my $cfghash = $self->parser(@_);
+}
+
+=head2 parser INITARGS
+
+Imports the configuration read and writes it to the internal database. If no
+filename is passed as an argument, then it will quietly skip the commit.
+
+Note: if you override this method in a child class, it must create an
+anonymous hash tree and pass the reference to the commit() method. Here
+is a simple example:
+
+    sub parser {
+        my $self = shift;
+        
+        my $cfg = {
+            group1 => {
+                subgroup1 => {
+                    param1 => 'val1',
+                    param2 => 'val2',
+                },
+            },
+            group2 => {
+                subgroup1 => {
+                    param3 => 'val3',
+                    param4 => 'val4',
+                },
+            },
+        };
+        
+        # pass original params, appended with a comment string for the commit
+        $self->commit( $cfg, @_, comment => 'import from my perl hash' );
+    }
+
+In the comment, you should include details on where the config came from
+(i.e.: the filename or directory).
+
+=cut
+
+sub parser {
     my $self   = shift;
-    my %params = @_;
+    my $params = {@_};
 
-    my $init_args = $Config::Versioned::init_args;
+    # populate our local params with init_args, if needed,
+    # without overwriting init_args
+    foreach my $key ( keys %{$Config::Versioned::init_args} ) {
+        if ( not exists $params->{$key} ) {
+            $params->{$key} = $Config::Versioned::init_args->{$key};
+        }
+    }
 
-    foreach my $key ( keys %params ) {
-        $init_args->{$key} = $params{$key};
+    # If no filename was specified, then there is no import of
+    # configuration files needed. Quietly exit method.
+
+    if ( not $params->{filename} ) {
+        return $self;
     }
 
     # Read the configuration from the import files
 
-    my %tmpcfg = ();
-    $self->_read_config_path( $init_args->{filename},
-        \%tmpcfg, @{ $init_args->{path} } );
+    my %cfg = ();
+    $self->_read_config_path( $params->{filename}, \%cfg,
+        @{ $params->{path} } );
 
     my $comment = "Import config from "
-      . $self->_which( $init_args->{filename}, @{ $init_args->{path} } );
+      . $self->_which( $params->{filename}, @{ $params->{path} } );
 
     # convert the foreign data structure to a simple hash tree,
     # where the value is either a scalar or a hash reference.
 
     my $tmphash = {};
-    foreach my $sect ( keys %tmpcfg ) {
+    foreach my $sect ( keys %cfg ) {
 
         # build up the underlying branch for these leaves
 
@@ -418,10 +467,38 @@ sub _import_cfg {
 
         # now add the leaves
 
-        foreach my $leaf ( keys %{ $tmpcfg{$sect} } ) {
-            $sectref->{$leaf} = $tmpcfg{$sect}{$leaf};
+        foreach my $leaf ( keys %{ $cfg{$sect} } ) {
+            $sectref->{$leaf} = $cfg{$sect}{$leaf};
         }
 
+    }
+
+    $self->commit( $tmphash, @_, comment => $comment );
+}
+
+=head2 commit CFGHASH, INITARGS
+
+Import the configuration tree in the CFGHASH anonymous hash and commit
+the modifications to the internal git bare repository.
+
+=cut
+
+sub commit {
+    my $self = shift;
+    my $hash = shift;
+
+    if ( ref($hash) ne 'HASH' ) {
+        confess "ERR: commit() - arg not hash ref [$hash]";
+    }
+
+    my $params = {@_};
+
+    # populate our local params with init_args, if needed,
+    # without overwriting init_args
+    foreach my $key ( keys %{$Config::Versioned::init_args} ) {
+        if ( not exists $params->{$key} ) {
+            $params->{$key} = $Config::Versioned::init_args->{$key};
+        }
     }
 
     my $parent = undef;
@@ -436,7 +513,7 @@ sub _import_cfg {
     }
 
     #    warn "# author_name: ", $init_args->{author_name}, "\n";
-    my $tree = $self->_hash2tree($tmphash);
+    my $tree = $self->_hash2tree($hash);
 
     #
     # Now that we have a "staging" tree, compare its hash with
@@ -454,11 +531,11 @@ sub _import_cfg {
     #
 
     my $actor = Git::PurePerl::Actor->new(
-        name  => $init_args->{author_name} || "process: $0",
-        email => $init_args->{author_mail} || $ENV{USER} . '@localhost',
+        name  => $params->{author_name} || "process: $0",
+        email => $params->{author_mail} || $ENV{USER} . '@localhost',
     );
 
-    my $time = $init_args->{commit_time} || DateTime->now;
+    my $time = $params->{commit_time} || DateTime->now;
 
     my @commit_attrs = (
         tree           => $tree->sha1,
@@ -466,7 +543,7 @@ sub _import_cfg {
         authored_time  => $time,
         committer      => $actor,
         committed_time => $time,
-        comment        => $comment,
+        comment        => $params->{comment} || 'import config',
     );
     if ($parent) {
         push @commit_attrs, parent => $parent;
@@ -482,7 +559,7 @@ sub _hash2tree {
     my $hash = shift;
 
     if ( ref($hash) ne 'HASH' ) {
-        die "ERR: _hash2tree() - arg not hash ref [$hash]";
+        confess "ERR: _hash2tree() - arg not hash ref [$hash]";
     }
 
     my @dir_entries = ();

@@ -36,9 +36,6 @@ BEGIN {
     );
 }
 
-# Call _import_cfg to simulate loading a second time with
-# a modified configuration
-
 ##
 ## BASIC INIT
 ##
@@ -53,7 +50,7 @@ is( $cfg->version, $ver1, 'check version (sha1 hash) of first commit' );
 
 # force a re-load of the configuration file we already used to ensure
 # that we don't add a commit when there were no changes
-$cfg->_import_cfg();
+$cfg->parser();
 is( $cfg->version, $ver1, 're-import should not create new commit' );
 
 # check the internal helper functions
@@ -78,26 +75,26 @@ is( $cfg->get('group1.ldap1.uri'),
 my $cfg2 = Config::Versioned->new( prefix => 'group2' );
 ok( $cfg2, 'create new config instance with prefix' );
 
-is( $cfg2->{prefix}, 'group2', 'check internal hash for prefix');
+is( $cfg2->{prefix}, 'group2', 'check internal hash for prefix' );
 
 is( $cfg2->get('ldap.uri'),
     'ldaps://example.org', "check single attribute with prefix" );
 
-$cfg->_import_cfg(
-        filename    => '01-initdb-2.conf',
-        path        => [qw( t )],
-        commit_time => DateTime->from_epoch( epoch => 1240351682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
+$cfg->parser(
+    filename    => '01-initdb-2.conf',
+    path        => [qw( t )],
+    commit_time => DateTime->from_epoch( epoch => 1240351682 ),
+    author_name => 'Test User',
+    author_mail => 'test@example.com',
 );
 is( $cfg->version, $ver2, 'check version of second commit' );
 
-$cfg->_import_cfg(
-        filename    => '01-initdb-3.conf',
-        path        => [qw( t )],
-        commit_time => DateTime->from_epoch( epoch => 1240361682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
+$cfg->parser(
+    filename    => '01-initdb-3.conf',
+    path        => [qw( t )],
+    commit_time => DateTime->from_epoch( epoch => 1240361682 ),
+    author_name => 'Test User',
+    author_mail => 'test@example.com',
 );
 is( $cfg->version, $ver3, 'check version of third commit' );
 

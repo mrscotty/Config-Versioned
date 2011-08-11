@@ -21,6 +21,10 @@ no_index:
   directory:
     - inc
     - t
+recommends:
+  Config::Any: 0
+  Config::Merge: 0
+  YAML::XS: 0
 requires:
   Git::PurePerl: 0
 resources:

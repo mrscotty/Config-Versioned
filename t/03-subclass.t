@@ -14,21 +14,8 @@ package MyConfig;
 
 use base qw( Config::Versioned );
 
-# override parent method to be able to inject configuration
-sub _import_disabled {
-    my ($class) = shift;
-    my %params = @_;
-    $params{dbpath} = $gittestdir;
-    $params{filename} = '00-load.conf';
-    $params{path} = [ qw( t ) ];
-    $params{commit_time} = DateTime->from_epoch( epoch => 1240341682 );
-    $params{author_name} = 'Test User';
-    $params{author_mail} = 'test@example.com';
-    $class->SUPER::_import( %params );
-}
-
 sub new {
-    my ( $this ) = shift;
+    my ($this) = shift;
     my $class = ref($this) || $this;
 
     $this->SUPER::new( dbpath => $gittestdir );
@@ -40,10 +27,7 @@ if ( not -d $gittestdir ) {
     die "Test repo not found - did you run 01-initdb.t already?";
 }
 
-
 #use_ok( 'MyConfig' );
 my $cfg = MyConfig->new();
 ok( $cfg, 'created MyConfig instance' );
-is( $cfg->version, $ver3, 'check version of HEAD');
-
-diag("Testing Config::Versioned $Config::Versioned::VERSION, Perl $], $^X");
+is( $cfg->version, $ver3, 'check version of HEAD' );
