@@ -26,13 +26,15 @@ BEGIN {
     # fire it up!
     use_ok(
         'Config::Versioned',
-        dbpath      => $gittestdir,
-        autocreate  => 1,
-        filename    => '01-initdb.conf',
-        path        => [qw( t )],
-        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
+        {
+            dbpath      => $gittestdir,
+            autocreate  => 1,
+            filename    => '01-initdb.conf',
+            path        => [qw( t )],
+            commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+            author_name => 'Test User',
+            author_mail => 'test@example.com',
+        }
     );
 }
 
@@ -72,7 +74,7 @@ is( $obj->kind, 'blob', "_findobj() returns blob" );
 is( $cfg->get('group1.ldap1.uri'),
     'ldaps://example1.org', "check single attribute" );
 
-my $cfg2 = Config::Versioned->new( prefix => 'group2' );
+my $cfg2 = Config::Versioned->new( { prefix => 'group2' } );
 ok( $cfg2, 'create new config instance with prefix' );
 
 is( $cfg2->{prefix}, 'group2', 'check internal hash for prefix' );
@@ -81,20 +83,24 @@ is( $cfg2->get('ldap.uri'),
     'ldaps://example.org', "check single attribute with prefix" );
 
 $cfg->parser(
-    filename    => '01-initdb-2.conf',
-    path        => [qw( t )],
-    commit_time => DateTime->from_epoch( epoch => 1240351682 ),
-    author_name => 'Test User',
-    author_mail => 'test@example.com',
+    {
+        filename    => '01-initdb-2.conf',
+        path        => [qw( t )],
+        commit_time => DateTime->from_epoch( epoch => 1240351682 ),
+        author_name => 'Test User',
+        author_mail => 'test@example.com',
+    }
 );
 is( $cfg->version, $ver2, 'check version of second commit' );
 
 $cfg->parser(
-    filename    => '01-initdb-3.conf',
-    path        => [qw( t )],
-    commit_time => DateTime->from_epoch( epoch => 1240361682 ),
-    author_name => 'Test User',
-    author_mail => 'test@example.com',
+    {
+        filename    => '01-initdb-3.conf',
+        path        => [qw( t )],
+        commit_time => DateTime->from_epoch( epoch => 1240361682 ),
+        author_name => 'Test User',
+        author_mail => 'test@example.com',
+    }
 );
 is( $cfg->version, $ver3, 'check version of third commit' );
 

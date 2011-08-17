@@ -48,7 +48,7 @@ my (%path_is_secure);
     my $old1 = $cfg->get('subsystem1.group.param1', $version);
     my @keys = $cfg->list('subsys1.db');
 
-    my $cfg2 = Config::Versioned->new( prefix => 'subsystem1.group' );
+    my $cfg2 = Config::Versioned->new( { prefix => 'subsystem1.group' } );
     my $p1 = $cfg2->get('param1');
     my $p2 = $cfg2->get('param2');
 
@@ -144,7 +144,7 @@ It is used for debugging purposes only!
 
 =back
 
-=head2 new()
+=head2 new( { PARAMS } )
 
 This is called during init() and creates an object instance. It may
 also be called elsewhere and given a I<prefix> to restrict C<get()>
@@ -156,9 +156,10 @@ sub new {
     my ($this) = shift;
     my $class  = ref($this) || $this;
     my $self   = {};
-    my %params = @_;
+    my $params = shift;
 
-    warn "# new() called with params: ", join( ', ', %params ), "\n" if $debug;
+    warn "# new() called with params: ", join( ', ', %{$params} ), "\n"
+      if $debug;
     $Config::Versioned::init_args ||= {};
     warn "# new() called with init_args: ",
       join( ', ', %{$Config::Versioned::init_args} ), "\n"
@@ -172,8 +173,8 @@ sub new {
         qw( path filename dbpath directory autocreate author_name author_mail commit_time )
       )
     {
-        if ( exists $params{$key} ) {
-            $init_args->{$key} = $params{$key};
+        if ( exists $params->{$key} ) {
+            $init_args->{$key} = $params->{$key};
         }
     }
     $self->{init_args} = $init_args;    # deprecated?!?
@@ -181,8 +182,8 @@ sub new {
     # process instance args
 
     foreach my $key (qw( prefix commit_time author_name author_mail )) {
-        if ( exists $params{$key} ) {
-            $self->{$key} = $params{$key};
+        if ( exists $params->{$key} ) {
+            $self->{$key} = $params->{$key};
         }
     }
 
@@ -190,7 +191,7 @@ sub new {
         $self->_init_repo($init_args);
     }
 
-    my $cfghash = $self->parser( %{$init_args} );
+    my $cfghash = $self->parser($init_args);
 
     return ($self);
 }
@@ -301,29 +302,33 @@ sub version {
 # method Config::Versioned->_import() (for subclassing)
 
 sub import {
-    my ( $package, @args ) = @_;
-    $package->_import(@args);
+    my ( $package, $args ) = @_;
+    $package->_import($args);
 }
 
 sub _import_test {
-    my ( $class, @args ) = @_;
+    my ( $class, $args ) = @_;
     $default_option_processor = undef;
-    $class->_import(@args);
+    $class->_import($args);
 }
 
 sub _import {
-    my ( $class, @args ) = @_;
+    my ( $class, $args ) = @_;
 
     # We only do this once (the default Config::Versioned option processor
     # is a singleton)
 
     if ( not $Config::Versioned::init_args ) {
 
-        if ( not( $#args % 2 == 1 ) ) {
-            croak
-"Config::Versioned::import(): must have an even number of vars/values for named args";
+        if ( not $args ) {
+            $args = {};    # default to an empty hash
         }
-        my $init_args = {@args};
+        elsif ( ref($args) ne 'HASH' ) {
+            croak "Config::Versioned::import(): args must be a HASHREF";
+        }
+        my $init_args = $args;
+
+        #        }
 
         if ( not defined $init_args->{path} ) {
             $init_args->{path} = [qw( . )];
@@ -397,6 +402,8 @@ is a simple example:
 
     sub parser {
         my $self = shift;
+        my $params = shift;
+        $params->{comment} = 'import from my perl hash';
         
         my $cfg = {
             group1 => {
@@ -414,7 +421,7 @@ is a simple example:
         };
         
         # pass original params, appended with a comment string for the commit
-        $self->commit( $cfg, @_, comment => 'import from my perl hash' );
+        $self->commit( $cfg, $params );
     }
 
 In the comment, you should include details on where the config came from
@@ -424,7 +431,7 @@ In the comment, you should include details on where the config came from
 
 sub parser {
     my $self   = shift;
-    my $params = {@_};
+    my $params = shift;
 
     # populate our local params with init_args, if needed,
     # without overwriting init_args
@@ -473,7 +480,8 @@ sub parser {
 
     }
 
-    $self->commit( $tmphash, @_, comment => $comment );
+    $params->{comment} = $comment;
+    $self->commit( $tmphash, $params );
 }
 
 =head2 commit CFGHASH, INITARGS
@@ -491,7 +499,7 @@ sub commit {
         confess "ERR: commit() - arg not hash ref [$hash]";
     }
 
-    my $params = {@_};
+    my $params = shift;
 
     # populate our local params with init_args, if needed,
     # without overwriting init_args

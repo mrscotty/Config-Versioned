@@ -21,17 +21,20 @@ use base qw( Config::Versioned );
 sub new {
     my ($this) = shift;
     my $class = ref($this) || $this;
+    my $params = shift;
 
-    $this->SUPER::new(
-        dbpath      => $gitdb,
-        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
-    );
+    $params->{dbpath}      = $gitdb;
+    $params->{commit_time} = DateTime->from_epoch( epoch => 1240341682 );
+    $params->{author_name} = 'Test User';
+    $params->{author_mail} = 'test@example.com';
+
+    $this->SUPER::new($params);
 }
 
 sub parser {
-    my $self = shift;
+    my $self   = shift;
+    my $params = shift;
+    $params->{comment} = 'import from my perl hash';
 
     my $cfg = {
         group1 => {
@@ -49,7 +52,7 @@ sub parser {
     };
 
     # pass original params, appended with a comment string for the commit
-    $self->commit( $cfg, @_, comment => 'import from my perl hash' );
+    $self->commit( $cfg, $params );
 
 }
 

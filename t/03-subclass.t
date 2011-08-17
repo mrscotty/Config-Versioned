@@ -17,8 +17,10 @@ use base qw( Config::Versioned );
 sub new {
     my ($this) = shift;
     my $class = ref($this) || $this;
+    my $params = shift;
+    $params->{dbpath} = $gittestdir;
 
-    $this->SUPER::new( dbpath => $gittestdir );
+    $this->SUPER::new($params);
 }
 
 package main;

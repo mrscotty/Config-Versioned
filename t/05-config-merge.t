@@ -30,18 +30,20 @@ use Data::Dumper;
 sub new {
     my ($this) = shift;
     my $class = ref($this) || $this;
+    my $params = shift;
 
-    $this->SUPER::new(
-        dbpath      => $gitdb,
-        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
-    );
+    $params->{dbpath}      = $gitdb;
+    $params->{commit_time} = DateTime->from_epoch( epoch => 1240341682 );
+    $params->{author_name} = 'Test User';
+    $params->{author_mail} = 'test@example.com';
+
+    $this->SUPER::new($params);
 
 }
 
 sub parser {
     my $self     = shift;
+    my $params   = shift;
     my $filename = '';
 
     my $cm    = Config::Merge->new('t/05-config-merge.d');
@@ -50,9 +52,10 @@ sub parser {
     my $tree = $self->cm2tree($cmref);
 
     #    warn "Config::Merge TREE: ", Dumper($tree), "\n";
+    
+    $params->{comment} = 'import from ' . $filename . ' using Config::Merge';
 
-    $self->commit( $tree, @_,
-        comment => 'import from ' . $filename . ' using Config::Merge' );
+    $self->commit( $tree, $params );
 }
 
 sub cm2tree {

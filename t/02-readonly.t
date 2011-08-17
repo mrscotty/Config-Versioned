@@ -16,7 +16,7 @@ if ( not -d $gittestdir ) {
     die "Test repo not found - did you run 01-initdb.t already?";
 }
 
-use_ok( 'Config::Versioned', dbpath => $gittestdir );
+use_ok( 'Config::Versioned', { dbpath => $gittestdir } );
 
 my $cfg = Config::Versioned->new();
 ok( $cfg, 'create new config instance' );

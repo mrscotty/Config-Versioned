@@ -12,12 +12,14 @@ BEGIN {
 
     use_ok(
         'Config::Versioned',
-        dbpath      => $gittestdir,
-        filename    => '00-load.conf',
-        path        => [qw( t )],
-        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
-        author_name => 'Test User',
-        author_mail => 'test@example.com',
+        {
+            dbpath      => $gittestdir,
+            filename    => '00-load.conf',
+            path        => [qw( t )],
+            commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+            author_name => 'Test User',
+            author_mail => 'test@example.com',
+        }
     );
 }
 
