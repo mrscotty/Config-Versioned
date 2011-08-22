@@ -1,0 +1,32 @@
+#!/usr/bin/env perl
+#
+# cfgver - Configuration Version Reporter
+#
+# This utility reports the current configuration version and may
+# also be used to check whether a given version number exists in
+# the database.
+
+use strict;
+use warnings;
+
+use Config::Versioned;
+use Getopt::Long;
+
+my $opt_version;
+my $opt_dbpath;
+
+my $result = GetOptions( 'dbpath=s' => \$opt_dbpath, 'version=s' => \$opt_version );
+
+if ( not $opt_dbpath ) {
+    die "Error: dbpath must be specified\n";
+}
+
+my @params = ( dbpath => $opt_dbpath );
+
+my $cfg = Config::Versioned->new( { @params } );
+if ( not $cfg ) {
+    die "Error: unable to create Config::Versioned object: $@";
+}
+
+print $cfg->version( $opt_version ), "\n";
+

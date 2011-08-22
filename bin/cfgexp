@@ -1,0 +1,41 @@
+#!/usr/bin/env perl
+#
+# cfgexp - Configuration Exporter
+#
+# This utility exports the configuration for the given version.
+#
+# 
+
+use strict;
+use warnings;
+
+use Config::Versioned;
+use Getopt::Long;
+use Data::Dumper;
+
+my $opt_version;
+my $opt_dbpath;
+my $opt_format = 'text';
+
+my $result = GetOptions( 'dbpath=s' => \$opt_dbpath, 'version=s' => \$opt_version, 'format=s' => \$opt_format );
+
+if ( not $opt_dbpath ) {
+    die "Error: dbpath must be specified\n";
+}
+
+my @params = ( dbpath => $opt_dbpath );
+if ( $opt_version ) {
+    push @params, version => $opt_version;
+}
+
+my $cfg = Config::Versioned->new( { @params } );
+if ( not $cfg ) {
+    die "Error: unable to create Config::Versioned object: $@";
+}
+
+my $dump = $cfg->dumptree( $opt_version );
+
+foreach my $key ( sort keys %{ $dump } ) {
+    print $key, ':  ', $dump->{$key}, "\n";
+}
+

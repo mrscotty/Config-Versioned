@@ -280,18 +280,103 @@ sub listattr {
     }
 }
 
+=head2 dumptree( [ VERSION ] )
+
+This fetches the entire tree for the given version (default: newest version)
+and returns a hashref to a named-parameter list.
+
+=cut
+
+sub dumptree {
+    my $self    = shift;
+    my $version = shift;
+    my $cfg     = $Config::Versioned::git;
+
+    # If no version hash was given, default to the HEAD of master
+
+    if ( not $version ) {
+        if ( $cfg->all_sha1s->all ) {
+            my $master = $cfg->ref('refs/heads/master');
+            if ( not $master ) {
+                die "ERR: no master object found";
+            }
+            $version = $master->sha1;
+        }
+        else {
+            return;    # if no sha1s are in repo, there's nothing to return
+        }
+
+    }
+
+    my $obj = $cfg->get_object($version);
+    if ( not $obj ) {
+        $@ = "No object found for SHA1 " . $version ? $version : '';
+        return;
+    }
+
+    if ( $obj->kind eq 'commit' ) {
+        $obj = $obj->tree;
+    }
+
+    my $ret = ();
+
+    my @directory_entries = $obj->directory_entries;
+
+    foreach my $de (@directory_entries) {
+        my $child = $cfg->get_object( $de->sha1 );
+#        warn "DEBUG: dump - child name = ", $de->filename, "\n";
+#        warn "DEBUG: dump - child kind = ", $child->kind, "\n";
+
+        if ( $child->kind eq 'tree' ) {
+            my $subret = $self->dumptree($de->sha1);
+            foreach my $key ( keys %{ $subret } ) {
+                $ret->{ $de->filename . $delimiter . $key } = $subret->{$key};
+            }
+        } elsif ( $child->kind eq 'blob' ) {
+            $ret->{ $de->filename } = $child->content;
+        } else {
+            die "ERROR: unexpected kind: ", $child->kind, "\n";
+        }
+
+    }
+    return $ret;
+
+    #            if ( $de->kind eq 'tree'
+    #            if ( $de->filename eq $key ) {
+    #                $found++;
+    #                $obj = $cfg->get_object( $de->sha1 );
+    #                last;
+    #            }
+    #        }
+
+}
+
 =head2 version
 
 This returns the current version of the configuration database, which
 happens to be the SHA1 hash of the HEAD of the internal git repository.
 
+Optionally, a version hash may be passed and version() will return a true
+value if it is found.
+
 =cut
 
 sub version {
     my $self = shift;
+    my $version = shift;
+    my $cfg = $Config::Versioned::git;
 
-    my $head = $Config::Versioned::git->head;
-    return $head->sha1;
+    if ( $version ) {
+        my $obj = $cfg->get_object($version);
+        if ( $obj and $obj->sha1 eq $version ) {
+            return $version;
+        } else {
+            return;
+        }
+    } else {
+        my $head = $cfg->head;
+        return $head->sha1;
+    }
 }
 
 =head1 INTERNALS
