@@ -1,3 +1,5 @@
+bin/cfgexp
+bin/cfgver
 build.txt
 Changes
 inc/Module/AutoInstall.pm
@@ -29,5 +31,7 @@ t/04-parser.t
 t/05-config-merge.d/db.yaml
 t/05-config-merge.d/local.yaml
 t/05-config-merge.t
+t/06-cfgver.t
+t/07-cfgexp.t
 t/pod-coverage.t
 t/pod.t
