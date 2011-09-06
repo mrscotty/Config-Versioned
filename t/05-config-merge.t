@@ -85,7 +85,7 @@ sub cm2tree {
 package main;
 
 SKIP: {
-    skip "Config::Merge not installed", 2 if $req_cm_err;
+    skip "Config::Merge not installed", 5 if $req_cm_err;
     my $cfg = MyConfig->new();
 
     ok( $cfg, 'created MyConfig instance' );
