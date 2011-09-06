@@ -7,7 +7,7 @@ use Test::More tests => 2;
 use strict;
 use warnings;
 
-my $cfgexp     = 'bin/cfgexp';
+my $cfgexp     = 'bin/cfgver export';
 my $gittestdir = qw( t/01-initdb.git );
 my $ver1       = 'bcd156cb443a8812f444015053cadf3f1f55cc1a';
 my $ver2       = 'bde0ab785072417fa506de689ae2620ad004e649';

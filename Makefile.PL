@@ -16,5 +16,7 @@ build_requires 'Path::Class';
 
 auto_install;
 
+install_script  'cfgver';
+
 WriteAll;
 

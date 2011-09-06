@@ -5,6 +5,15 @@
 # This utility reports the current configuration version and may
 # also be used to check whether a given version number exists in
 # the database.
+#
+# Optionally, it will also dump the configuration keys and values for
+# the given version (or latest, if no version is specified).
+#
+# Usage:
+#
+#   cfgver [options]
+#
+#   cfgver export [options]
 
 use strict;
 use warnings;
@@ -15,18 +24,41 @@ use Getopt::Long;
 my $opt_version;
 my $opt_dbpath;
 
-my $result = GetOptions( 'dbpath=s' => \$opt_dbpath, 'version=s' => \$opt_version );
+my $result =
+  GetOptions( 'dbpath=s' => \$opt_dbpath, 'version=s' => \$opt_version );
+
+my $command = 'version';
+
+if (@ARGV) {
+    $command = shift @ARGV;
+}
 
 if ( not $opt_dbpath ) {
     die "Error: dbpath must be specified\n";
 }
 
 my @params = ( dbpath => $opt_dbpath );
+if ($opt_version) {
+    push @params, version => $opt_version;
+}
 
-my $cfg = Config::Versioned->new( { @params } );
+my $cfg = Config::Versioned->new( {@params} );
 if ( not $cfg ) {
     die "Error: unable to create Config::Versioned object: $@";
 }
 
-print $cfg->version( $opt_version ), "\n";
+if ( $command eq 'version' ) {
+    print $cfg->version($opt_version), "\n";
+}
+elsif ( $command eq 'export' ) {
+    my $dump = $cfg->dumptree($opt_version);
+
+    foreach my $key ( sort keys %{$dump} ) {
+        print $key, ':  ', $dump->{$key}, "\n";
+    }
+
+}
+else {
+    die "Error: unknown command '$command'\n";
+}
 
