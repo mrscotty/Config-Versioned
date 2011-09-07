@@ -188,7 +188,9 @@ sub new {
     }
 
     if ( not defined $Config::Versioned::git ) {
-        $self->_init_repo($init_args);
+        if ( not $self->_init_repo($init_args) ) {
+            return;
+        }
     }
 
     my $cfghash = $self->parser($init_args);
@@ -242,9 +244,16 @@ sub get {
 
     if ( $obj->kind eq 'blob' ) {
         return $obj->content;
+    } elsif ( $obj->kind eq 'tree' ) {
+        my @entries = $obj->directory_entries;
+        my @ret     = ();
+        foreach my $de (@entries) {
+            push @ret, $de->filename;
+        }
+        return sort { ( $a =~ /^\d+$/ and $b =~ /^\d+$/ ) ? $a <=> $b : $a cmp $b } @ret;
     }
     else {
-        warn "# DEBUG: get() was asked to return a non-blob object\n";
+        warn "# DEBUG: get() was asked to return a non-blob object [kind=", $obj->kind, "]\n";
         return;
     }
 }
@@ -454,7 +463,10 @@ sub _init_repo {
     }
 
     if ( not -d $init_args->{dbpath} ) {
-        dir( $init_args->{dbpath} )->mkpath;
+        if ( not dir( $init_args->{dbpath} )->mkpath ) {
+            $@ = 'Error creating directory '. $init_args->{dbpath}. ': ' . $!;
+            return;
+        }
         $git = Git::PurePerl->init( gitdir => $init_args->{dbpath} );
     }
     else {

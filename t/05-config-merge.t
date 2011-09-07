@@ -10,7 +10,7 @@ BEGIN {
     our $req_cm_err = $@;
 }
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 use DateTime;
 use Path::Class;
 use Data::Dumper;
@@ -99,5 +99,12 @@ SKIP: {
         \@attrlist,
         [ sort(qw( host1 host2 )) ],
         'Check attr list at db.port'
+    );
+
+    my @getlist = $cfg->get('db.hosts');
+    is_deeply(
+        \@getlist,
+        [ qw( 0 1 ) ],
+        'Check that get() returns array'
     );
 }
