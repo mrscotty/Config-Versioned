@@ -11,6 +11,9 @@
 # Temp files from t/
 t/.*\.git/
 
+# Local directory for saving utility scripts, etc.
+^util
+
 # Temp, old, and backup files
 ~$
 \.swp$

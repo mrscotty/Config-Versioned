@@ -1,7 +1,10 @@
-# t/04-parser.t
+# t/08-sha.t
 #
 # This test script is for the optional external parsing of
 # configuration files using Config::Merge.
+#
+# It specifically tries to address a problem I was having with the SHA1
+# hash working correctly on my Mac but not on Ubuntu
 #
 # vim: syntax=perl
 
@@ -10,15 +13,16 @@ BEGIN {
     our $req_cm_err = $@;
 }
 
-use Test::More tests => 6;
+use Test::More tests => 3;
 use DateTime;
 use Path::Class;
 use Data::Dumper;
 use Carp qw(confess);
 
-my $ver1 = 'd0866aa8d58568994849d6b7137c59dcdc42c927';
+my $ver1 = '777fd3790995c010b20a9d7af47ec4d72d472b3e';
 
-my $gitdb = 't/05-config-merge.git';
+my $gitdb  = 't/08-sha.git';
+my $cfgdir = 't/08-sha.d';
 
 dir($gitdb)->rmtree;
 
@@ -46,7 +50,7 @@ sub parser {
     my $params   = shift;
     my $filename = '';
 
-    my $cm    = Config::Merge->new('t/05-config-merge.d');
+    my $cm    = Config::Merge->new($cfgdir);
     my $cmref = $cm->();
 
     my $tree = $self->cm2tree($cmref);
@@ -61,7 +65,7 @@ sub parser {
 sub cm2tree {
     my $self = shift;
     my $cm   = shift;
-    my $tree = {};
+
     if ( ref($cm) eq 'HASH' ) {
         my $ret = {};
         foreach my $key ( keys %{$cm} ) {
@@ -91,20 +95,5 @@ SKIP: {
     ok( $cfg, 'created MyConfig instance' );
     is( $cfg->version, $ver1, 'check version of HEAD' );
 
-    is( $cfg->get('db.hosts.1'),    'host2', 'Check param db.hosts.1' );
-    is( $cfg->get('db.port.host2'), '789',   'Check param db.hosts.1' );
-
-    my @attrlist = sort( $cfg->listattr('db.port') );
-    is_deeply(
-        \@attrlist,
-        [ sort(qw( host1 host2 )) ],
-        'Check attr list at db.port'
-    );
-
-    my @getlist = $cfg->get('db.hosts');
-    is_deeply(
-        \@getlist,
-        [ qw( 0 1 ) ],
-        'Check that get() returns array'
-    );
+    is( $cfg->get('port.host1'), '123', 'Check param port.host1' );
 }

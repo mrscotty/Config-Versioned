@@ -9,7 +9,7 @@ use Test::More tests => 2;
 use DateTime;
 use Path::Class;
 
-my $ver1 = '89ea7aaa3e2f3988ccefc071687f2720619e7357';
+my $ver1 = '6286dd48b488848e6498b82acc081000e3e375bf';
 
 our $gitdb = 't/04-parser.git';
 dir($gitdb)->rmtree;

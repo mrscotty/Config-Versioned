@@ -29,11 +29,11 @@ Pushing CPAN modules from Github to CPAN
 - Tag the release and push the tag to github
 
     git tag rel_001
-    git push -tags
+    git push --tags
 
 - At PAUSE (https://pause.perl.org/pause/authenquery?ACTION=add_uri), enter
 the URL and click on "Upload this URL"
 
-    http://github.com/mrscotty/Config-Versioned/tarball/rel_001/Config-Versioned-0.01.tgz
+    http://nodeload.github.com/mrscotty/Config-Versioned/tarball/rel_001/Config-Versioned-0.01.tgz
 
 

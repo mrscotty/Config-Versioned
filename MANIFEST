@@ -33,5 +33,7 @@ t/05-config-merge.d/local.yaml
 t/05-config-merge.t
 t/06-cfgver.t
 t/07-cfgexp.t
+t/08-sha.d/port.yaml
+t/08-sha.t
 t/pod-coverage.t
 t/pod.t
