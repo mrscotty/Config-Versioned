@@ -31,8 +31,8 @@ use DateTime;
 use Git::PurePerl;
 use Path::Class;
 
-my $delimiter = '.';    # NOTE: in the regexes, the dot is hardcoded
-my $debug     = 0;
+my $delimiter   = '.';
+my $delimiter_regex = qr/ \. /xms;
 
 # a reference to the singleton Config::Versioned object that parsed the command line
 my ($default_option_processor);
@@ -141,6 +141,17 @@ Note: this option might become deprecated. I just wanted some extra
 
 This sets the time to use for the commits in the internal git repository.
 It is used for debugging purposes only!
+
+=item delimiter
+
+Specifies the delimiter used to separate the different levels in the
+string used to designate the location of a configuration parameter. [Default: '.']
+
+=item delimiter_regex
+
+Specifies the delimiter used to separate the different levels in the
+string used to designate the location of a configuration parameter.
+[Default: qr/ \. /xms]
 
 =back
 
@@ -439,6 +450,13 @@ sub _import {
             $init_args->{dbpath} = 'cfgver.git';
         }
 
+        if ( exists $init_args->{delimiter} ) {
+            $delimiter = $init_args->{delimiter};
+        }
+        if ( exists $init_args->{delimiter_regex} ) {
+            $delimiter_regex = $init_args->{delimiter_regex};
+        }
+
         $Config::Versioned::init_args = $init_args;
 
         #        my $option_processor = $class->new($init_args);
@@ -562,7 +580,7 @@ sub parser {
 
         # build up the underlying branch for these leaves
 
-        my @sectpath = split( /\./, $sect );
+        my @sectpath = split( $delimiter_regex, $sect );
         my $sectref = $tmphash;
         foreach my $nodename (@sectpath) {
             $sectref->{$nodename} ||= {};
@@ -619,6 +637,10 @@ sub commit {
 
     #    warn "# author_name: ", $init_args->{author_name}, "\n";
     my $tree = $self->_hash2tree($hash);
+
+    if ($debug) {
+        print join( "\n# ", '', $self->_debugtree($tree) ), "\n";
+    }
 
     #
     # Now that we have a "staging" tree, compare its hash with
@@ -711,7 +733,7 @@ sub _mknode {
     my $self     = shift;
     my $location = shift;
     my $ref      = $Config::Versioned::git;
-    foreach my $key ( split( /\./, $location ) ) {
+    foreach my $key ( split( $delimiter_regex, $location ) ) {
         if ( not exists $ref->{$key} ) {
             $ref->{$key} = {};
         }
@@ -770,7 +792,7 @@ sub _findobj {
     if ( $obj->kind eq 'commit' ) {
         $obj = $obj->tree;
     }
-    my @keys = split /\./, $location;
+    my @keys = split $delimiter_regex, $location;
 
     # iterate thru the levels in the location
 
@@ -819,7 +841,7 @@ sub _get_sect_key {
     # Config::Std uses section/key, so we need to split up the
     # given key
 
-    my @tokens = split( /\./, $key );
+    my @tokens = split( $delimiter_regex, $key );
     $key = pop @tokens;
     my $sect = join( $delimiter, @tokens );
 
