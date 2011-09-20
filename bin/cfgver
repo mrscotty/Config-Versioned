@@ -15,10 +15,87 @@ use warnings;
 
 use Config::Versioned;
 use Getopt::Long;
+use Data::Dumper;
+
+our $req_cm_err;
+
+BEGIN {
+    eval 'require Config::Merge;';
+    $req_cm_err = $@;
+}
 
 my $opt_version;
 my $opt_dbpath;
 my $opt_format;
+my $opt_authorname;
+my $opt_authormail;
+
+#
+# The MyConfig package is for importing with Config::Merge
+#
+package MyConfig;
+use Data::Dumper;
+
+use base qw( Config::Versioned );
+
+sub new {
+    my ($this) = shift;
+    my $class = ref($this) || $this;
+    my $params = shift;
+
+    $params->{dbpath}      = $opt_dbpath;
+    $params->{commit_time} = DateTime->now;
+    $params->{author_name} = $opt_authorname || $ENV{USER};
+    $params->{author_mail} = $opt_authormail || $ENV{USER} . '@localhost';
+    warn "DEBUG: new params=", Dumper($params), "\n";
+
+    $this->SUPER::new($params);
+
+}
+
+sub parser {
+    my $self     = shift;
+    my $params   = shift;
+    warn "DEBUG: parser params=", Dumper($params), "\n";
+    my $dirname = ref($params->{path}) eq 'ARRAY' ? $params->{path}->[0] : $params->{path};
+
+    my $cm    = Config::Merge->new($dirname);
+    my $cmref = $cm->();
+
+    my $tree = $self->cm2tree($cmref);
+
+    $params->{comment} = 'import from ' . $dirname . ' using Config::Merge';
+
+    if ( not $self->commit( $tree, $params ) ) {
+        die "Error committing import from $dirname: $@";
+    }
+}
+
+sub cm2tree {
+    my $self = shift;
+    my $cm   = shift;
+    my $tree = {};
+    if ( ref($cm) eq 'HASH' ) {
+        my $ret = {};
+        foreach my $key ( keys %{$cm} ) {
+            $ret->{$key} = $self->cm2tree( $cm->{$key} );
+        }
+        return $ret;
+    }
+    elsif ( ref($cm) eq 'ARRAY' ) {
+        my $ret = {};
+        my $i   = 0;
+        foreach my $entry ( @{$cm} ) {
+            $ret->{ $i++ } = $self->cm2tree($entry);
+        }
+        return $ret;
+    }
+    else {
+        return $cm;
+    }
+}
+
+package main;
 
 my $help = <<EOF;
 cfgver - Config::Versioned cli
@@ -42,6 +119,12 @@ version Specific version identifier to retrieve.
 
 format  Output format for dumping values. [not implemented]
 
+author  When importing, this is the name of the author to use
+        for the commit
+
+mail    When importing, this is the mail address of the author to use
+        for the commit
+
 COMMANDS
 
 By default, the version identifier is displayed.
@@ -52,8 +135,13 @@ only the values for that key are displayed.
 
 EOF
 
-my $result =
-  GetOptions( 'dbpath=s' => \$opt_dbpath, 'version=s' => \$opt_version, 'format=s' => \$opt_format );
+my $result = GetOptions(
+    'dbpath=s'  => \$opt_dbpath,
+    'version=s' => \$opt_version,
+    'format=s'  => \$opt_format,
+    'author=s' => \$opt_authorname,
+    'mail=s'    => \$opt_authormail,
+);
 
 my $command = 'version';
 
@@ -70,28 +158,51 @@ if ($opt_version) {
     push @params, version => $opt_version;
 }
 
-my $cfg = Config::Versioned->new( {@params} );
-if ( not $cfg ) {
-    die "Error: unable to create Config::Versioned object: $@";
-}
-
 if ( $command eq 'version' ) {
+    my $cfg = Config::Versioned->new( {@params} );
+    if ( not $cfg ) {
+        die "Error: unable to create Config::Versioned object: $@";
+    }
     print $cfg->version($opt_version), "\n";
 }
 elsif ( $command eq 'export' ) {
+    my $cfg = Config::Versioned->new( {@params} );
+    if ( not $cfg ) {
+        die "Error: unable to create Config::Versioned object: $@";
+    }
     my $key = shift @ARGV;
 
-    if ( $key ) {
-        foreach my $val ( $cfg->get( $key ) ) {
+    if ($key) {
+        foreach my $val ( $cfg->get($key) ) {
             print $val, "\n";
         }
-    } else {
+    }
+    else {
         my $dump = $cfg->dumptree($opt_version);
 
         foreach my $key ( sort keys %{$dump} ) {
             print $key, ':  ', $dump->{$key}, "\n";
         }
     }
+
+}
+elsif ( $command eq 'import' ) {
+    if ( $req_cm_err ) {
+        die "Error: Config::Merge needed for import";
+    }
+    my $source = shift @ARGV;
+    if ( not $source ) {
+        die "Error: no source directory specified\n";
+    }
+    elsif ( not -d $source ) {
+        die "Error: source directory '$source' not found\n";
+    }
+    push @params, path => [split /:/, $source];
+    my $cfg = MyConfig->new( { @params } );
+    if ( not $cfg ) {
+        die "Error: unable to create Config::Versioned object: $@";
+    }
+
 
 }
 else {
