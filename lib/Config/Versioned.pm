@@ -18,11 +18,11 @@ Config::Versioned - Simple, versioned access to configuration data
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use Carp;
 use Config::Std;

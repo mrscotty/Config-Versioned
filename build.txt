@@ -19,7 +19,13 @@ When done, run:
 
     or
 
-  make veryclean
+  make verycleangit 
+
+Using "git flow"
+
+    git flow release start 0.03
+    # bump release string in META.yml and lib/Config/Versioned.pm
+    make veryclean
 
 Pushing CPAN modules from Github to CPAN
 (from http://blog.usarundbrief.com/?p=36)

@@ -29,6 +29,7 @@ my $opt_dbpath;
 my $opt_format;
 my $opt_authorname;
 my $opt_authormail;
+my $opt_help;
 
 #
 # The MyConfig package is for importing with Config::Merge
@@ -111,19 +112,19 @@ SYNOPSIS
 
 OPTIONS
 
-dbpath  Name of directory containing internal config repository.
-        [default is cfgver.git]
+--dbpath    Name of directory containing internal config repository.
+            [default is cfgver.git]
 
-version Specific version identifier to retrieve.
-        [default is current version]
+--version   Specific version identifier to retrieve.
+            [default is current version]
 
-format  Output format for dumping values. [not implemented]
+--format    Output format for dumping values. [not implemented]
 
-author  When importing, this is the name of the author to use
-        for the commit
+--author    When importing, this is the name of the author to use
+            for the commit
 
-mail    When importing, this is the mail address of the author to use
-        for the commit
+--mail      When importing, this is the mail address of the author to use
+            for the commit
 
 COMMANDS
 
@@ -141,7 +142,12 @@ my $result = GetOptions(
     'format=s'  => \$opt_format,
     'author=s' => \$opt_authorname,
     'mail=s'    => \$opt_authormail,
+    'help'      => \$opt_help,
 );
+
+if ($opt_help) {
+    die $help, "\n";
+}
 
 my $command = 'version';
 

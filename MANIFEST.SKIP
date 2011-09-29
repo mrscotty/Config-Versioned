@@ -12,7 +12,10 @@
 t/.*\.git/
 
 # Local directory for saving utility scripts, etc.
+# and other stuff of mine
 ^util
+^TODO
+^.synctree
 
 # Temp, old, and backup files
 ~$
