@@ -31,7 +31,7 @@ use DateTime;
 use Git::PurePerl;
 use Path::Class;
 
-my $delimiter   = '.';
+my $delimiter       = '.';
 my $delimiter_regex = qr/ \. /xms;
 
 # a reference to the singleton Config::Versioned object that parsed the command line
@@ -158,6 +158,31 @@ Specifies the delimiter used to separate the different levels in the
 string used to designate the location of a configuration parameter.
 [Default: qr/ \. /xms]
 
+=item log_get_callback
+
+Specifies a callback function to be called by get() after fetching
+the value for the given key. The subroutine should accept the
+parameters LOCATION, VERSION, VALUE. The VALUE may either be a single
+scalar value or an array reference containing a list of values.
+
+    sub cb_log_get {
+        my $self = shift;
+        my $loc = shift;
+        my $ver = shift;
+        my $val = shift;
+
+        warn "Access config parameter: $loc ($ver) => ",
+            ref($val) eq 'ARRAY'
+                ? join(', ', @{ $val })
+                : $val,
+            "\n";
+    }
+    my $cfg = Config::Versioned->new( { log_get_callback => 'cb_log_get' } );
+
+Note: if log_get_callback is a code ref, it will be called as a function.
+Otherwise, the log_get_callback will specify a method name that is to be
+called on the current object instance.
+
 =back
 
 =head2 new( { PARAMS } )
@@ -186,7 +211,7 @@ sub new {
 
     # process class args
     foreach my $key (
-        qw( path filename dbpath directory autocreate author_name author_mail commit_time )
+        qw( path filename dbpath directory autocreate author_name author_mail commit_time log_get_callback )
       )
     {
         if ( exists $params->{$key} ) {
@@ -248,17 +273,21 @@ sub get {
     my $self     = shift;
     my $location = shift;
     my $version  = shift;
-
+    my $cb       = $self->{init_args}->{log_get_callback};
     if ( $self->{prefix} ) {
         $location = $self->{prefix} . $delimiter . $location;
     }
     my $obj = $self->_findobj( $location, $version );
 
+    warn "Config::Versioned::get() cb='$cb'";
+
     if ( not defined $obj ) {
+        $self->$cb( $location, $version, '<undefined>' ) if $cb;
         return;
     }
 
     if ( $obj->kind eq 'blob' ) {
+        $self->$cb( $location, $version, $obj->content ) if $cb;
         return $obj->content;
     }
     elsif ( $obj->kind eq 'tree' ) {
@@ -267,11 +296,16 @@ sub get {
         foreach my $de (@entries) {
             push @ret, $de->filename;
         }
-        return
+        my @sorted =
           sort { ( $a =~ /^\d+$/ and $b =~ /^\d+$/ ) ? $a <=> $b : $a cmp $b }
           @ret;
+        $self->$cb( $location, $version, \@sorted ) if $cb;
+        return @sorted;
     }
     else {
+        $self->$cb( $location, $version,
+            "<error: non-blob object '" . $obj->kind . "' not supported>" )
+          if $cb;
         warn "# DEBUG: get() was asked to return a non-blob object [kind=",
           $obj->kind, "]\n";
         return;
