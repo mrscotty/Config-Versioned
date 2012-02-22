@@ -22,7 +22,7 @@ Version 0.03
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.4';
 
 use Carp;
 use Config::Std;
@@ -199,7 +199,7 @@ sub new {
     my $self   = {};
     my $params = shift;
 
-    warn "# new() called with params: ", join( ', ', %{$params} ), "\n"
+    warn "# new() called with params: ", ref($params) eq 'HASH' ? join( ', ', %{$params} ) : '<none>', "\n"
       if $debug;
     $Config::Versioned::init_args ||= {};
     warn "# new() called with init_args: ",
@@ -277,9 +277,7 @@ sub get {
     if ( $self->{prefix} ) {
         $location = $self->{prefix} . $delimiter . $location;
     }
-    my $obj = $self->_findobj( $location, $version );
-
-    warn "Config::Versioned::get() cb='$cb'";
+    my ($obj, $deobj) = $self->_findobjx( $location, $version );
 
     if ( not defined $obj ) {
         $self->$cb( $location, $version, '<undefined>' ) if $cb;
@@ -288,7 +286,12 @@ sub get {
 
     if ( $obj->kind eq 'blob' ) {
         $self->$cb( $location, $version, $obj->content ) if $cb;
-        return $obj->content;
+        if ( $deobj->mode() == 120000 ) {
+            my $tmp = $obj->content;
+            return \$tmp;
+        } else {
+            return $obj->content;
+        }
     }
     elsif ( $obj->kind eq 'tree' ) {
         my @entries = $obj->directory_entries;
@@ -612,6 +615,17 @@ sub _import_cfg {
     my $cfghash = $self->parser(@_);
 }
 
+=head2 _get_anon_scalar
+
+Creates an anonymous scalar for representing symlinks in the tree structure.
+
+=cut
+
+sub _get_anon_scalar {
+    my $temp = shift;
+    return \$temp;
+}
+
 =head2 parser INITARGS
 
 Imports the configuration read and writes it to the internal database. If no
@@ -639,6 +653,12 @@ is a simple example:
                     param4 => 'val4',
                 },
             },
+            # This creates a symlink from 'group3.subgroup3' to 'connector1/group4'.
+            # Note the use of the scalar reference using the backslash.
+            group3 => {
+                subgroup3 => \'connector1/group4',
+            },
+
         };
         
         # pass original params, appended with a comment string for the commit
@@ -683,12 +703,14 @@ sub parser {
 
     my $tmphash = {};
     foreach my $sect ( keys %cfg ) {
+#        warn "# adding section '$sect'\n";
 
         # build up the underlying branch for these leaves
 
         my @sectpath = split( $delimiter_regex, $sect );
         my $sectref = $tmphash;
         foreach my $nodename (@sectpath) {
+#                warn "#\tadding nodename '$nodename'";
             $sectref->{$nodename} ||= {};
             $sectref = $sectref->{$nodename};
         }
@@ -696,7 +718,16 @@ sub parser {
         # now add the leaves
 
         foreach my $leaf ( keys %{ $cfg{$sect} } ) {
-            $sectref->{$leaf} = $cfg{$sect}{$leaf};
+            # If the leaf start or ends with an '@', treat it as
+            # a symbolic link.
+            if ($leaf =~ m{ (?: \A @ (.*?) @ \z | \A @ (.*) | (.*?) @ \z ) }xms) {
+                my $match = $1 || $2 || $3;
+                # make it a ref to an anonymous scalar so we know it's a symlink
+                #my $t = _get_anon_scalar($1);
+                $sectref->{$match} = \($cfg{$sect}{$leaf});
+            } else {
+                $sectref->{$leaf} = $cfg{$sect}{$leaf};
+            }
         }
 
     }
@@ -819,6 +850,21 @@ sub _hash2tree {
             );
             push @dir_entries, $de;
         }
+        elsif ( ref( $hash->{$key} ) eq 'SCALAR' ) {
+            # Support for symbolic links
+            if ($debug) {
+                warn "# _hash2tree() adding symlink for $key\n";
+            }
+            my $obj =
+              Git::PurePerl::NewObject::Blob->new( content => ${ $hash->{$key} } );
+            $Config::Versioned::git->put_object($obj);
+            my $de = Git::PurePerl::NewDirectoryEntry->new(
+                mode     => '120000',
+                filename => $key,
+                sha1     => $obj->sha1,
+            );
+            push @dir_entries, $de;
+        }
         else {
             my $obj =
               Git::PurePerl::NewObject::Blob->new( content => $hash->{$key} );
@@ -890,20 +936,26 @@ sub _mknode {
     return $ref;
 }
 
-=head2 _findobj LOCATION [, VERSION ]
+=head2 _findobjx LOCATION [, VERSION ]
 
-Returns the Git::PurePerl object found in the file path at LOCATION.
+Returns the Git::PurePerl and Git::PurePerl::DirectoryEntry objects found in
+the file path at LOCATION.
 
-    my $ref1 = $cfg->_findnode("smartcard.ldap.uri");
-    my $ref2 = $cfg->_findnode("certs.signature.duration", $wfcfgver);
+    my ($ref1, $de1) = $cfg->_findnode("smartcard.ldap.uri");
+    my $ref2, $de2) = $cfg->_findnode("certs.signature.duration", $wfcfgver);
+
+In most cases, the C<_findobj> version is sufficient. This extended version
+is used to look at the attribtes of the directory entry for things like whether
+the blob is a symlink.
 
 =cut
 
-sub _findobj {
+sub _findobjx {
     my $self     = shift;
     my $location = shift;
     my $ver      = shift;
     my $cfg      = $Config::Versioned::git;
+    my ($obj, $deobj);
 
     # If no version hash was given, default to the HEAD of master
 
@@ -926,7 +978,7 @@ sub _findobj {
     # TODO: is this the way we want to handle the error of not finding
     # the given object?
 
-    my $obj = $cfg->get_object($ver);
+    $obj = $cfg->get_object($ver);
     if ( not $obj ) {
         $@ = "No object found for SHA1 $ver";
         return;
@@ -953,6 +1005,7 @@ sub _findobj {
             if ( $de->filename eq $key ) {
                 $found++;
                 $obj = $cfg->get_object( $de->sha1 );
+                $deobj = $de;
                 last;
             }
         }
@@ -961,10 +1014,28 @@ sub _findobj {
             return;
         }
     }
-    return $obj;
+    return $obj, $deobj;
 
 }
 
+=head2 _findobj LOCATION [, VERSION ]
+
+Returns the Git::PurePerl object found in the file path at LOCATION.
+
+    my $ref1 = $cfg->_findnode("smartcard.ldap.uri");
+    my $ref2 = $cfg->_findnode("certs.signature.duration", $wfcfgver);
+
+=cut
+
+sub _findobj {
+    my $self = shift;
+    my ($obj, $deobj) = $self->_findobjx(@_);
+    if (defined $obj) {
+        return $obj;
+    } else {
+        return;
+    }
+}
 =head2 _get_sect_key LOCATION
 
 Returns the section and key needed by Config::Std to access the

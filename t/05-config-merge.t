@@ -3,6 +3,10 @@
 # This test script is for the optional external parsing of
 # configuration files using Config::Merge.
 #
+# If you're supporting Config::Merge in your app, be sure to look at the
+# semantics here. This implementation creates symlinks for keys that end
+# with an '@' symbol.
+#
 # vim: syntax=perl
 
 BEGIN {
@@ -10,13 +14,13 @@ BEGIN {
     our $req_cm_err = $@;
 }
 
-use Test::More tests => 6;
+use Test::More tests => 8;
 use DateTime;
 use Path::Class;
 use Data::Dumper;
 use Carp qw(confess);
 
-my $ver1 = 'd0866aa8d58568994849d6b7137c59dcdc42c927';
+my $ver1 = 'dbfc699b2bfaf60b0c62191d82a31bb57f75d282';
 
 my $gitdb = 't/05-config-merge.git';
 
@@ -65,7 +69,15 @@ sub cm2tree {
     if ( ref($cm) eq 'HASH' ) {
         my $ret = {};
         foreach my $key ( keys %{$cm} ) {
-            $ret->{$key} = $self->cm2tree( $cm->{$key} );
+            # If the key is appended with an '@' character, treat it
+            # as a symbolic link.
+            if ( $key =~ m/(.+)[@]$/ ) {
+                my $newkey = $1;
+                my $temp = $self->cm2tree( $cm->{$key} );
+                $ret->{$newkey} = \$temp;
+            } else {
+                $ret->{$key} = $self->cm2tree( $cm->{$key} );
+            }
         }
         return $ret;
     }
@@ -107,4 +119,7 @@ SKIP: {
         [ qw( 0 1 ) ],
         'Check that get() returns array'
     );
+    my $sym = $cfg->get('db.symgroup.sym1');
+    is(ref($sym), 'SCALAR', 'check value of symlink is anon ref to scalar');
+    is(${$sym}, 'conn1:new.location', 'check target of symlink' );
 }
