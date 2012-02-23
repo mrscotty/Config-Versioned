@@ -11,17 +11,9 @@ my $ver3 = '3b5047486706e55528a2684daef195bb4f9d0923';
 my $gittestdir = 't/01-initdb.git';
 
 package MyConfig;
+use Moose;
 
-use base qw( Config::Versioned );
-
-sub new {
-    my ($this) = shift;
-    my $class = ref($this) || $this;
-    my $params = shift;
-    $params->{dbpath} = $gittestdir;
-
-    $this->SUPER::new($params);
-}
+extends 'Config::Versioned';
 
 package main;
 
@@ -29,7 +21,6 @@ if ( not -d $gittestdir ) {
     die "Test repo not found - did you run 01-initdb.t already?";
 }
 
-#use_ok( 'MyConfig' );
-my $cfg = MyConfig->new();
+my $cfg = MyConfig->new( { dbpath => $gittestdir } );
 ok( $cfg, 'created MyConfig instance' );
 is( $cfg->version, $ver3, 'check version of HEAD' );

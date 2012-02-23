@@ -9,8 +9,9 @@
 # vim: syntax=perl
 
 BEGIN {
+    use vars qw( $req_cm_err );
     eval 'require Config::Merge;';
-    our $req_cm_err = $@;
+    $req_cm_err = $@;
 }
 
 use Test::More tests => 3;
@@ -28,22 +29,11 @@ dir($gitdb)->rmtree;
 
 package MyConfig;
 
-use base qw( Config::Versioned );
+use Moose;
+
+extends 'Config::Versioned';
+
 use Data::Dumper;
-
-sub new {
-    my ($this) = shift;
-    my $class = ref($this) || $this;
-    my $params = shift;
-
-    $params->{dbpath}      = $gitdb;
-    $params->{commit_time} = DateTime->from_epoch( epoch => 1240341682 );
-    $params->{author_name} = 'Test User';
-    $params->{author_mail} = 'test@example.com';
-
-    $this->SUPER::new($params);
-
-}
 
 sub parser {
     my $self     = shift;
@@ -90,7 +80,14 @@ package main;
 
 SKIP: {
     skip "Config::Merge not installed", 5 if $req_cm_err;
-    my $cfg = MyConfig->new();
+    my $cfg = MyConfig->new( {
+    dbpath      => $gitdb,
+    commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+    author_name => 'Test User',
+    author_mail => 'test@example.com',
+    autocreate  => 1,
+}
+    );
 
     ok( $cfg, 'created MyConfig instance' );
     is( $cfg->version, $ver1, 'check version of HEAD' );

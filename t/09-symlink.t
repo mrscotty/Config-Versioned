@@ -7,7 +7,7 @@
 ##
 ## vim: syntax=perl
 
-use Test::More tests => 31;
+use Test::More tests => 27;
 
 use strict;
 use warnings;
@@ -28,6 +28,14 @@ BEGIN {
     # fire it up!
     use_ok(
         'Config::Versioned',
+    );
+}
+
+##
+## BASIC INIT
+##
+
+my $cfg = Config::Versioned->new(
         {
             dbpath      => $gittestdir,
             autocreate  => 1,
@@ -37,18 +45,11 @@ BEGIN {
             author_name => 'Test User',
             author_mail => 'test@example.com',
         }
-    );
-}
-
-##
-## BASIC INIT
-##
-
-my $cfg = Config::Versioned->new();
+);
 ok( $cfg, 'create new config instance' );
 
 # Internals: check that the head really points to a commit object
-is( $Config::Versioned::git->head->kind, 'commit', 'head should be a commit' );
+is( $cfg->_git()->head->kind, 'commit', 'head should be a commit' );
 
 is( $cfg->version, $ver1, 'check version (sha1 hash) of first commit' );
 
@@ -75,14 +76,6 @@ is( $obj->kind, 'blob', "_findobj() returns blob" );
 
 is( $cfg->get('group1.ldap1.uri'),
     'ldaps://example1.org', "check single attribute" );
-
-my $cfg2 = Config::Versioned->new( { prefix => 'group2' } );
-ok( $cfg2, 'create new config instance with prefix' );
-
-is( $cfg2->{prefix}, 'group2', 'check internal hash for prefix' );
-
-is( $cfg2->get('ldap2.uri'),
-    'ldaps://example2.org', "check single attribute with prefix" );
 
 $cfg->parser(
     {
@@ -115,13 +108,6 @@ is( $cfg->get( 'group2.ldap2.user', $ver1 ),
 # sort 'em just to be on the safe side
 my @attrlist = sort( $cfg->listattr('group1.ldap1') );
 is_deeply( \@attrlist, [ sort(qw( uri user password )) ], "check attr list" );
-
-my @attrlist2 = sort( $cfg2->listattr('ldap2') );
-is_deeply(
-    \@attrlist2,
-    [ sort(qw( uri user password )) ],
-    "check attr list with prefix"
-);
 
 is( $cfg->kind('group1.ldap1'), 'tree', 'kind() returns tree');
 is( $cfg->kind('group1.ldap1.user'), 'blob', 'kind() returns blob');

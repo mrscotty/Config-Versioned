@@ -16,20 +16,9 @@ dir($gitdb)->rmtree;
 
 package MyConfig;
 
-use base qw( Config::Versioned );
+use Moose;
 
-sub new {
-    my ($this) = shift;
-    my $class = ref($this) || $this;
-    my $params = shift;
-
-    $params->{dbpath}      = $gitdb;
-    $params->{commit_time} = DateTime->from_epoch( epoch => 1240341682 );
-    $params->{author_name} = 'Test User';
-    $params->{author_mail} = 'test@example.com';
-
-    $this->SUPER::new($params);
-}
+extends 'Config::Versioned';
 
 sub parser {
     my $self   = shift;
@@ -58,9 +47,15 @@ sub parser {
 
 package main;
 
-#use_ok( 'MyConfig' );
-my $cfg = MyConfig->new();
+my $cfg = MyConfig->new(
+    {
+        dbpath      => $gitdb,
+        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+        author_name => 'Test User',
+        author_mail => 'test@example.com',
+        autocreate  => 1,
+    }
+);
 ok( $cfg, 'created MyConfig instance with parser' );
 is( $cfg->version, $ver1, 'check version of HEAD' );
 
-#diag("Testing Config::Versioned $Config::Versioned::VERSION, Perl $], $^X");

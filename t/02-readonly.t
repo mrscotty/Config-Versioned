@@ -16,8 +16,8 @@ if ( not -d $gittestdir ) {
     die "Test repo not found - did you run 01-initdb.t already?";
 }
 
-use_ok( 'Config::Versioned', { dbpath => $gittestdir } );
+use_ok( 'Config::Versioned' );
 
-my $cfg = Config::Versioned->new();
+my $cfg = Config::Versioned->new( {dbpath => $gittestdir });
 ok( $cfg, 'create new config instance' );
 is( $cfg->version, $ver3, 'check version of HEAD' );

@@ -10,9 +10,6 @@
 # the given version (or latest, if no version is specified).
 #
 
-use strict;
-use warnings;
-
 use Config::Versioned;
 use Getopt::Long;
 use Data::Dumper;
@@ -35,20 +32,14 @@ my $opt_help;
 # The MyConfig package is for importing with Config::Merge
 #
 package MyConfig;
+use Moose;
+extends 'Config::Versioned';
 use Data::Dumper;
-
-use base qw( Config::Versioned );
 
 sub new {
     my ($this) = shift;
     my $class = ref($this) || $this;
     my $params = shift;
-
-    $params->{dbpath}      = $opt_dbpath;
-    $params->{commit_time} = DateTime->now;
-    $params->{author_name} = $opt_authorname || $ENV{USER};
-    $params->{author_mail} = $opt_authormail || $ENV{USER} . '@localhost';
-    warn "DEBUG: new params=", Dumper($params), "\n";
 
     $this->SUPER::new($params);
 
@@ -159,20 +150,24 @@ if ( not $opt_dbpath ) {
     die "Error: dbpath must be specified\n";
 }
 
-my @params = ( dbpath => $opt_dbpath );
-if ($opt_version) {
-    push @params, version => $opt_version;
-}
+my %params = ();
+
+$params{dbpath} = $opt_dbpath if $opt_dbpath;
+$params{version} = $opt_version if $opt_version;
+
+$params{commit_time} = DateTime->now;
+$params{author_name} = $opt_authorname || $ENV{USER};
+$params{author_mail} = $opt_authormail || $ENV{USER} . '@localhost';
 
 if ( $command eq 'version' ) {
-    my $cfg = Config::Versioned->new( {@params} );
+    my $cfg = Config::Versioned->new( \%params );
     if ( not $cfg ) {
         die "Error: unable to create Config::Versioned object: $@";
     }
     print $cfg->version($opt_version), "\n";
 }
 elsif ( $command eq 'export' ) {
-    my $cfg = Config::Versioned->new( {@params} );
+    my $cfg = Config::Versioned->new( \%params );
     if ( not $cfg ) {
         die "Error: unable to create Config::Versioned object: $@";
     }
@@ -203,8 +198,8 @@ elsif ( $command eq 'import' ) {
     elsif ( not -d $source ) {
         die "Error: source directory '$source' not found\n";
     }
-    push @params, path => [split /:/, $source];
-    my $cfg = MyConfig->new( { @params } );
+    $params{path} = [split /:/, $source];
+    my $cfg = MyConfig->new( \%params );
     if ( not $cfg ) {
         die "Error: unable to create Config::Versioned object: $@";
     }

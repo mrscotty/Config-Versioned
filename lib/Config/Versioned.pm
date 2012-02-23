@@ -1,16 +1,17 @@
 ## Config::Versioned
 ##
-## Written 2011 by Scott T. Hardin for the OpenXPKI project
-## Copyright (C) 2010, 2011 by The OpenXPKI Project
+## Written 2011-2012 by Scott T. Hardin for the OpenXPKI project
+## Copyright (C) 2010-2012 by The OpenXPKI Project
 ##
-## Based on the CPAN module App::Options
+## Was based on the CPAN module App::Options, but the import() stuff
+## bit me so we're turning into a Moose.
 ##
 ## vim: syntax=perl
 
 package Config::Versioned;
 
-use strict;
-use warnings;
+use Moose;
+use namespace::autoclean;
 
 =head1 NAME
 
@@ -18,11 +19,11 @@ Config::Versioned - Simple, versioned access to configuration data
 
 =head1 VERSION
 
-Version 0.03
+Version 0.5
 
 =cut
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 
 use Carp;
 use Config::Std;
@@ -31,18 +32,30 @@ use DateTime;
 use Git::PurePerl;
 use Path::Class;
 
-my $delimiter       = '.';
-my $delimiter_regex = qr/ \. /xms;
+has 'path' => ( is => 'ro', isa => 'ArrayRef', default => sub { [qw( . )] } );
+has 'filename' => ( is => 'ro', isa => 'Str' );
+has 'dbpath' =>
+  ( is => 'ro', isa => 'Str', default => 'cfgver.git', required => 1 );
+has 'author_name' => ( is => 'ro', isa => 'Str', default => "process: $@" );
+has 'author_mail' => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => $ENV{GIT_AUTHOR_EMAIL} || $ENV{USER} . '@localhost'
+);
+has 'autocreate' => ( is => 'ro', isa => 'Bool', default => 0 );
+has 'commit_time' => ( is => 'ro', isa => 'DateTime' );
+has 'comment'     => ( is => 'rw', isa => 'Str' );
+has 'delimiter'   => ( is => 'ro', isa => 'Str', default => '.' );
+has 'delimiter_regex' =>
+  ( is => 'ro', isa => 'RegexpRef', default => sub { qr{ \. }xms } );
+has 'log_get_callback' => ( is => 'ro' );
+has '_git'             => ( is => 'rw'  );
+has 'debug'            => ( is => 'rw', isa => 'Int', default => 0 );
 
 # a reference to the singleton Config::Versioned object that parsed the command line
-my ($default_option_processor);
+#my ($default_option_processor);
 
-my (%path_is_secure);
-
-my $debug = 0;
-if ( defined $ENV{CONFIG_VERSIONED_DEBUG} ) {
-    $debug = $ENV{CONFIG_VERSIONED_DEBUG};
-}
+#my (%path_is_secure);
 
 =head1 SYNOPSIS
 
@@ -53,9 +66,6 @@ if ( defined $ENV{CONFIG_VERSIONED_DEBUG} ) {
     my $old1 = $cfg->get('subsystem1.group.param1', $version);
     my @keys = $cfg->list('subsys1.db');
 
-    my $cfg2 = Config::Versioned->new( { prefix => 'subsystem1.group' } );
-    my $p1 = $cfg2->get('param1');
-    my $p2 = $cfg2->get('param2');
 
 =head1 DESCRIPTION
 
@@ -133,19 +143,22 @@ commits.
 =item autocreate
 
 If no internal git repository exists, it will be created during code
-initialization. 
+initialization. Note that if an import filename is specified, this 
+automatically sets autocreate to true.
 
  autocreate => 1,
 
 The default is "0".
 
 Note: this option might become deprecated. I just wanted some extra
-"insurance" during the early stages of development.
+"insurance" during the early stages of development. 
 
 =item commit_time
 
 This sets the time to use for the commits in the internal git repository.
 It is used for debugging purposes only!
+
+Note: this must be a DateTime object instance.
 
 =item delimiter
 
@@ -185,75 +198,47 @@ called on the current object instance.
 
 =back
 
-=head2 new( { PARAMS } )
+=head2 BUILD( { PARAMS } )
 
-This is called during init() and creates an object instance. It may
-also be called elsewhere and given a I<prefix> to restrict C<get()>
-requests to a specific node.
+NOTE: This is used internally, so the typical user shouldn't bother with this.
+
+This is called after an object is created. When cloning, it is important that
+the new instance gets a reference to the same Git::PurePerl instance. This
+will prevent two instances from getting out of sync if modifications are made
+to the configuration data at runtime. To handle this, the parameter 'GITREF'
+must be passed when cloning.
+
+Note 2: this should be handled automatically in the _near_ future.
+
+    my $cv2 = $cv1->new( GITREF => $cv1->_git() );
 
 =cut
 
-sub new {
-    my ($this) = shift;
-    my $class  = ref($this) || $this;
-    my $self   = {};
-    my $params = shift;
+sub BUILD {
+    my $self = shift;
+    my $args = shift;
 
-    warn "# new() called with params: ", ref($params) eq 'HASH' ? join( ', ', %{$params} ) : '<none>', "\n"
-      if $debug;
-    $Config::Versioned::init_args ||= {};
-    warn "# new() called with init_args: ",
-      join( ', ', %{$Config::Versioned::init_args} ), "\n"
-      if $debug;
-    bless $self, $class;
-
-    my $init_args = $Config::Versioned::init_args;
-
-    # process class args
-    foreach my $key (
-        qw( path filename dbpath directory autocreate author_name author_mail commit_time log_get_callback )
-      )
-    {
-        if ( exists $params->{$key} ) {
-            $init_args->{$key} = $params->{$key};
-        }
-    }
-    $self->{init_args} = $init_args;    # deprecated?!?
-
-    # process instance args
-
-    foreach my $key (qw( prefix commit_time author_name author_mail )) {
-        if ( exists $params->{$key} ) {
-            $self->{$key} = $params->{$key};
-        }
+    if ( defined $ENV{CONFIG_VERSIONED_DEBUG} ) {
+        $self->debug( $ENV{CONFIG_VERSIONED_DEBUG} );
     }
 
-    if ( not defined $Config::Versioned::git ) {
-        if ( not $self->_init_repo($init_args) ) {
-            return;
-        }
+    if ( not $self->_init_repo() ) {
+        return;
     }
-
-    my $cfghash = $self->parser($init_args);
+#    if ( not $self->_git() ) {
+#        if ( $args->{GITREF} ) {
+#            $self->_git( $args->{GITREF} );
+#        }
+#        else {
+#            if ( not $self->_init_repo() ) {
+#                return;
+#            }
+#        }
+#    }
+#
+#    $self->parser($args);
 
     return ($self);
-}
-
-=head2 isParam( LOCATION [, VERSION ] )
-
-Returns true if the given LOCATION contains a parameter value and false
-if it is a tree object containing subtrees or objects. In other words,
-if you get a true value on a LOCATION, you can fetch the value of the 
-parameter. Otherwise, you should use list() to see the names of the 
-locations subordinate to this LOCATION.
-
-NOTE: I don't like the wording of this, but it is more a
-minor kludge in a proof-of-concept implementation.
-
-=cut
-
-sub isParam {
-    die "isParam not implemented";
 }
 
 =head2 get( LOCATION [, VERSION ] )
@@ -273,11 +258,8 @@ sub get {
     my $self     = shift;
     my $location = shift;
     my $version  = shift;
-    my $cb       = $self->{init_args}->{log_get_callback};
-    if ( $self->{prefix} ) {
-        $location = $self->{prefix} . $delimiter . $location;
-    }
-    my ($obj, $deobj) = $self->_findobjx( $location, $version );
+    my $cb       = $self->log_get_callback();
+    my ( $obj, $deobj ) = $self->_findobjx( $location, $version );
 
     if ( not defined $obj ) {
         $self->$cb( $location, $version, '<undefined>' ) if $cb;
@@ -289,7 +271,8 @@ sub get {
         if ( $deobj->mode() == 120000 ) {
             my $tmp = $obj->content;
             return \$tmp;
-        } else {
+        }
+        else {
             return $obj->content;
         }
     }
@@ -349,9 +332,6 @@ sub kind {
     my $location = shift;
     my $version  = shift;
 
-    if ( $self->{prefix} ) {
-        $location = $self->{prefix} . $delimiter . $location;
-    }
     my $obj = $self->_findobj( $location, $version );
 
     if ( not defined $obj ) {
@@ -385,10 +365,6 @@ sub listattr {
     my $location = shift;
     my $version  = shift;
 
-    if ( $self->{prefix} ) {
-        $location = $self->{prefix} . $delimiter . $location;
-    }
-
     my $obj = $self->_findobj( $location, $version );
     if ( $obj and $obj->kind eq 'tree' ) {
         my @entries = $obj->directory_entries;
@@ -414,7 +390,7 @@ and returns a hashref to a named-parameter list.
 sub dumptree {
     my $self    = shift;
     my $version = shift;
-    my $cfg     = $Config::Versioned::git;
+    my $cfg     = $self->_git();
 
     # If no version hash was given, default to the HEAD of master
 
@@ -455,7 +431,8 @@ sub dumptree {
         if ( $child->kind eq 'tree' ) {
             my $subret = $self->dumptree( $de->sha1 );
             foreach my $key ( keys %{$subret} ) {
-                $ret->{ $de->filename . $delimiter . $key } = $subret->{$key};
+                $ret->{ $de->filename . $self->delimiter() . $key } =
+                  $subret->{$key};
             }
         }
         elsif ( $child->kind eq 'blob' ) {
@@ -467,15 +444,6 @@ sub dumptree {
 
     }
     return $ret;
-
-    #            if ( $de->kind eq 'tree'
-    #            if ( $de->filename eq $key ) {
-    #                $found++;
-    #                $obj = $cfg->get_object( $de->sha1 );
-    #                last;
-    #            }
-    #        }
-
 }
 
 =head2 version
@@ -491,7 +459,7 @@ value if it is found.
 sub version {
     my $self    = shift;
     my $version = shift;
-    my $cfg     = $Config::Versioned::git;
+    my $cfg     = $self->_git();
 
     if ($version) {
         my $obj = $cfg->get_object($version);
@@ -510,109 +478,40 @@ sub version {
 
 =head1 INTERNALS
 
-=cut
+=head2 _init_repo
 
-# This translates the procedural Config::Versioned::import() into the class
-# method Config::Versioned->_import() (for subclassing)
+Initializes the internal git repository used for storing the config
+values. 
 
-sub import {
-    my ( $package, $args ) = @_;
-    $package->_import($args);
-}
-
-sub _import_test {
-    my ( $class, $args ) = @_;
-    $default_option_processor = undef;
-    $class->_import($args);
-}
-
-sub _import {
-    my ( $class, $args ) = @_;
-
-    # We only do this once (the default Config::Versioned option processor
-    # is a singleton)
-
-    if ( not $Config::Versioned::init_args ) {
-
-        if ( not $args ) {
-            $args = {};    # default to an empty hash
-        }
-        elsif ( ref($args) ne 'HASH' ) {
-            croak "Config::Versioned::import(): args must be a HASHREF";
-        }
-        my $init_args = $args;
-
-        #        }
-
-        if ( not defined $init_args->{path} ) {
-            $init_args->{path} = [qw( . )];
-        }
-        elsif ( ref( $init_args->{path} ) ne 'ARRAY' ) {
-            croak "Config::Versioned 'path' must be a reference to an ARRAY";
-        }
-
-        #        if ( not $init_args->{filename} ) {
-        #            $init_args->{filename} = 'cfgver.conf';
-        #        }
-
-        if ( not $init_args->{dbpath} ) {
-            $init_args->{dbpath} = 'cfgver.git';
-        }
-
-        if ( exists $init_args->{delimiter} ) {
-            $delimiter = $init_args->{delimiter};
-        }
-        if ( exists $init_args->{delimiter_regex} ) {
-            $delimiter_regex = $init_args->{delimiter_regex};
-        }
-
-        $Config::Versioned::init_args = $init_args;
-
-        #        my $option_processor = $class->new($init_args);
-        #
-        #$default_option_processor =
-        #  $option_processor;    # save it in the singleton location
-
-    }
-}
-
-=head2 _init_repo INITARGS
+On error, it returns C<undef> and the reason is in C<$@>.
 
 =cut
 
 sub _init_repo {
-    my $self      = shift;
-    my $init_args = shift;
+    my $self = shift;
 
     my $git;
-    if ( not $init_args->{dbpath} ) {
-        die "ERROR: dbpath not set";
-    }
 
-    if ( not -d $init_args->{dbpath} ) {
-        if ( not dir( $init_args->{dbpath} )->mkpath ) {
-            $@ = 'Error creating directory ' . $init_args->{dbpath} . ': ' . $!;
-            return;
+    #    if ( not $init_args->{dbpath} ) {
+    #        die "ERROR: dbpath not set";
+    #    }
+
+    if ( not -d $self->dbpath() ) {
+        if ( $self->filename() || $self->autocreate() ) {
+            if ( not dir( $self->dbpath() )->mkpath ) {
+                die 'Error creating directory ' . $self->dbpath() . ': ' . $!;
+            }
+            $git = Git::PurePerl->init( gitdir => $self->dbpath() );
+        } else {
+            die 'Error: dbpath (' . $self->dbpath() . ') does not exist';
         }
-        $git = Git::PurePerl->init( gitdir => $init_args->{dbpath} );
     }
     else {
-        $git = Git::PurePerl->new( gitdir => $init_args->{dbpath} );
+        $git = Git::PurePerl->new( gitdir => $self->dbpath() );
     }
-    $Config::Versioned::git = $git;
-
-}
-
-=head2 _import_cfg INITARGS
-
-This wrapper calls parser() and is provided for
-backward compatibility.
-
-=cut
-
-sub _import_cfg {
-    my $self    = shift;
-    my $cfghash = $self->parser(@_);
+    $self->_git($git);
+    $self->parser();
+    return $self;
 }
 
 =head2 _get_anon_scalar
@@ -626,7 +525,7 @@ sub _get_anon_scalar {
     return \$temp;
 }
 
-=head2 parser INITARGS
+=head2 parser ARGS
 
 Imports the configuration read and writes it to the internal database. If no
 filename is passed as an argument, then it will quietly skip the commit.
@@ -637,8 +536,8 @@ is a simple example:
 
     sub parser {
         my $self = shift;
-        my $params = shift;
-        $params->{comment} = 'import from my perl hash';
+        my $args = shift;
+        $args->{comment} = 'import from my perl hash';
         
         my $cfg = {
             group1 => {
@@ -661,8 +560,8 @@ is a simple example:
 
         };
         
-        # pass original params, appended with a comment string for the commit
-        $self->commit( $cfg, $params );
+        # pass original args, appended with a comment string for the commit
+        $self->commit( $cfg, $args );
     }
 
 In the comment, you should include details on where the config came from
@@ -671,46 +570,43 @@ In the comment, you should include details on where the config came from
 =cut
 
 sub parser {
-    my $self   = shift;
-    my $params = shift;
+    my $self = shift;
+    my $args = shift;
 
-    # populate our local params with init_args, if needed,
-    # without overwriting init_args
-    foreach my $key ( keys %{$Config::Versioned::init_args} ) {
-        if ( not exists $params->{$key} ) {
-            $params->{$key} = $Config::Versioned::init_args->{$key};
+    foreach
+      my $key (qw( comment filename path author_name author_mail commit_time ))
+    {
+        if ( not exists $args->{$key} ) {
+            $args->{$key} = $self->$key();
         }
     }
 
     # If no filename was specified, then there is no import of
     # configuration files needed. Quietly exit method.
 
-    if ( not $params->{filename} ) {
+    if ( not $args->{filename} ) {
         return $self;
     }
 
     # Read the configuration from the import files
 
     my %cfg = ();
-    $self->_read_config_path( $params->{filename}, \%cfg,
-        @{ $params->{path} } );
+    $self->_read_config_path( $args->{filename}, \%cfg, @{ $args->{path} } );
 
-    my $comment = "Import config from "
-      . $self->_which( $params->{filename}, @{ $params->{path} } );
+    $args->{comment} ||= "Import config from "
+      . $self->_which( $args->{filename}, @{ $args->{path} } );
 
     # convert the foreign data structure to a simple hash tree,
     # where the value is either a scalar or a hash reference.
 
     my $tmphash = {};
     foreach my $sect ( keys %cfg ) {
-#        warn "# adding section '$sect'\n";
 
         # build up the underlying branch for these leaves
 
-        my @sectpath = split( $delimiter_regex, $sect );
+        my @sectpath = split( $self->delimiter_regex(), $sect );
         my $sectref = $tmphash;
         foreach my $nodename (@sectpath) {
-#                warn "#\tadding nodename '$nodename'";
             $sectref->{$nodename} ||= {};
             $sectref = $sectref->{$nodename};
         }
@@ -718,64 +614,64 @@ sub parser {
         # now add the leaves
 
         foreach my $leaf ( keys %{ $cfg{$sect} } ) {
+
             # If the leaf start or ends with an '@', treat it as
             # a symbolic link.
-            if ($leaf =~ m{ (?: \A @ (.*?) @ \z | \A @ (.*) | (.*?) @ \z ) }xms) {
+            if ( $leaf =~
+                m{ (?: \A @ (.*?) @ \z | \A @ (.*) | (.*?) @ \z ) }xms )
+            {
                 my $match = $1 || $2 || $3;
+
                 # make it a ref to an anonymous scalar so we know it's a symlink
                 #my $t = _get_anon_scalar($1);
-                $sectref->{$match} = \($cfg{$sect}{$leaf});
-            } else {
+                $sectref->{$match} = \( $cfg{$sect}{$leaf} );
+            }
+            else {
                 $sectref->{$leaf} = $cfg{$sect}{$leaf};
             }
         }
 
     }
 
-    $params->{comment} = $comment;
-    $self->commit( $tmphash, $params );
+    $self->commit( $tmphash, $args );
 }
 
-=head2 commit CFGHASH, INITARGS
+=head2 commit CFGHASH[, ARGS]
 
 Import the configuration tree in the CFGHASH anonymous hash and commit
 the modifications to the internal git bare repository.
+
+ARGS is a ref to a named-parameter list (e.g. HASH) that may contain the
+following keys to override the instance defaults:
+
+    author_name, author_mail, comment, commit_time
 
 =cut
 
 sub commit {
     my $self = shift;
     my $hash = shift;
+    my $args = shift;
 
     if ( ref($hash) ne 'HASH' ) {
         confess "ERR: commit() - arg not hash ref [$hash]";
     }
 
-    my $params = shift;
-
-    # populate our local params with init_args, if needed,
-    # without overwriting init_args
-    foreach my $key ( keys %{$Config::Versioned::init_args} ) {
-        if ( not exists $params->{$key} ) {
-            $params->{$key} = $Config::Versioned::init_args->{$key};
-        }
-    }
-
     my $parent = undef;
     my $master = undef;
 
-    if ( $Config::Versioned::git->all_sha1s->all ) {
-        $master = $Config::Versioned::git->ref('refs/heads/master');
+    if ( $self->_git()->all_sha1s->all ) {
+        $master = $self->_git()->ref('refs/heads/master');
         if ( not $master ) {
             die "ERR: no master object found";
         }
         $parent = $master->sha1;
     }
 
-    #    warn "# author_name: ", $init_args->{author_name}, "\n";
+    #    warn "# author_name: ", $self->author_name(), "\n";
     my $tree = $self->_hash2tree($hash);
 
-    if ($debug) {
+    if ( $self->debug() ) {
         print join( "\n# ", '', $self->_debugtree($tree) ), "\n";
     }
 
@@ -787,7 +683,7 @@ sub commit {
     #
 
     if ( $parent and $master->tree->sha1 eq $tree->sha1 ) {
-        if ($debug) {
+        if ( $self->debug() ) {
             carp("Nothing to commit (index matches HEAD)");
         }
         return $self;
@@ -798,11 +694,11 @@ sub commit {
     #
 
     my $actor = Git::PurePerl::Actor->new(
-        name  => $params->{author_name} || "process: $0",
-        email => $params->{author_mail} || $ENV{USER} . '@localhost',
+        name  => $args->{author_name} || $self->author_name,
+        email => $args->{author_mail} || $self->author_mail,
     );
 
-    my $time = $params->{commit_time} || DateTime->now;
+    my $time = $args->{commit_time} || $self->commit_time || DateTime->now;
 
     my @commit_attrs = (
         tree           => $tree->sha1,
@@ -810,14 +706,14 @@ sub commit {
         authored_time  => $time,
         committer      => $actor,
         committed_time => $time,
-        comment        => $params->{comment} || 'import config',
+        comment        => $args->{comment} || $self->comment(),
     );
     if ($parent) {
         push @commit_attrs, parent => $parent;
     }
 
     my $commit = Git::PurePerl::NewObject::Commit->new(@commit_attrs);
-    $Config::Versioned::git->put_object($commit);
+    $self->_git()->put_object($commit);
 
 }
 
@@ -828,18 +724,18 @@ sub _hash2tree {
     if ( ref($hash) ne 'HASH' ) {
         confess "ERR: _hash2tree() - arg not hash ref [$hash]";
     }
-    if ($debug) {
+    if ( $self->debug() ) {
         warn "Entered _hash2tree( $hash ): ", join( ', ', %{$hash} ), "\n";
     }
 
     my @dir_entries = ();
 
     foreach my $key ( keys %{$hash} ) {
-        if ($debug) {
+        if ( $self->debug() ) {
             warn "# _hash2tree() processing $key -> ", $hash->{$key}, "\n";
         }
         if ( ref( $hash->{$key} ) eq 'HASH' ) {
-            if ($debug) {
+            if ( $self->debug() ) {
                 warn "# _hash2tree() adding subtree for $key\n";
             }
             my $subtree = $self->_hash2tree( $hash->{$key} );
@@ -851,15 +747,17 @@ sub _hash2tree {
             push @dir_entries, $de;
         }
         elsif ( ref( $hash->{$key} ) eq 'SCALAR' ) {
+
             # Support for symbolic links
-            if ($debug) {
+            if ( $self->debug() ) {
                 warn "# _hash2tree() adding symlink for $key\n";
             }
             my $obj =
-              Git::PurePerl::NewObject::Blob->new( content => ${ $hash->{$key} } );
-            $Config::Versioned::git->put_object($obj);
+              Git::PurePerl::NewObject::Blob->new(
+                content => ${ $hash->{$key} } );
+            $self->_git()->put_object($obj);
             my $de = Git::PurePerl::NewDirectoryEntry->new(
-                mode     => '120000',
+                mode     => '120000',     # symlink
                 filename => $key,
                 sha1     => $obj->sha1,
             );
@@ -868,9 +766,9 @@ sub _hash2tree {
         else {
             my $obj =
               Git::PurePerl::NewObject::Blob->new( content => $hash->{$key} );
-            $Config::Versioned::git->put_object($obj);
+            $self->_git()->put_object($obj);
             my $de = Git::PurePerl::NewDirectoryEntry->new(
-                mode     => '100644',
+                mode     => '100644',     # plain file
                 filename => $key,
                 sha1     => $obj->sha1,
             );
@@ -881,19 +779,7 @@ sub _hash2tree {
       Git::PurePerl::NewObject::Tree->new( directory_entries =>
           [ sort { $a->filename cmp $b->filename } @dir_entries ] );
 
-#    my $sha1 = Digest::SHA->new();
-#    $sha1->add( $tree->raw() );
-#    my $test_sha1 = $sha1->hexdigest();
-#    if ( $test_sha1 ne $tree->sha1 ) {
-#        warn "WARNING: my sha1 $test_sha1; Git::PurePerl sha1 ", $tree->sha1, "\n";
-#    }
-#        if ( $test_sha1 eq 'c2b1cf11f2abf788bfef75bbdf0263c84c3eb058' or $test_sha1 eq 'deff7d65d491fe1291323a82080bb94d72577ac7' ) {
-#            warn "HEY!!!\n";
-#            warn hdump( $tree->raw ), "\n";
-#        }
-#    }
-
-    if ($debug) {
+    if ( $self->debug() ) {
         my $content = $tree->content;
         $content =~ s/(.)/sprintf("%x",ord($1))/eg;
         warn "# Added tree with dir entries: ",
@@ -905,7 +791,7 @@ sub _hash2tree {
 
     }
 
-    $Config::Versioned::git->put_object($tree);
+    $self->_git()->put_object($tree);
 
     return $tree;
 }
@@ -921,8 +807,8 @@ A reference to the node at the LOCATION is returned.
 sub _mknode {
     my $self     = shift;
     my $location = shift;
-    my $ref      = $Config::Versioned::git;
-    foreach my $key ( split( $delimiter_regex, $location ) ) {
+    my $ref      = $self->_git();
+    foreach my $key ( split( $self->delimiter_regex(), $location ) ) {
         if ( not exists $ref->{$key} ) {
             $ref->{$key} = {};
         }
@@ -954,14 +840,14 @@ sub _findobjx {
     my $self     = shift;
     my $location = shift;
     my $ver      = shift;
-    my $cfg      = $Config::Versioned::git;
-    my ($obj, $deobj);
+    my $cfg      = $self->_git();
+    my ( $obj, $deobj );
 
     # If no version hash was given, default to the HEAD of master
 
     if ( not $ver ) {
-        if ( $Config::Versioned::git->all_sha1s->all ) {
-            my $master = $Config::Versioned::git->ref('refs/heads/master');
+        if ( $self->_git()->all_sha1s->all ) {
+            my $master = $self->_git()->ref('refs/heads/master');
             if ( not $master ) {
                 die "ERR: no master object found";
             }
@@ -987,7 +873,7 @@ sub _findobjx {
     if ( $obj->kind eq 'commit' ) {
         $obj = $obj->tree;
     }
-    my @keys = split $delimiter_regex, $location;
+    my @keys = split $self->delimiter_regex(), $location;
 
     # iterate thru the levels in the location
 
@@ -1004,7 +890,7 @@ sub _findobjx {
         foreach my $de (@directory_entries) {
             if ( $de->filename eq $key ) {
                 $found++;
-                $obj = $cfg->get_object( $de->sha1 );
+                $obj   = $cfg->get_object( $de->sha1 );
                 $deobj = $de;
                 last;
             }
@@ -1029,18 +915,19 @@ Returns the Git::PurePerl object found in the file path at LOCATION.
 
 sub _findobj {
     my $self = shift;
-    my ($obj, $deobj) = $self->_findobjx(@_);
-    if (defined $obj) {
+    my ( $obj, $deobj ) = $self->_findobjx(@_);
+    if ( defined $obj ) {
         return $obj;
-    } else {
+    }
+    else {
         return;
     }
 }
+
 =head2 _get_sect_key LOCATION
 
 Returns the section and key needed by Config::Std to access the
-configuration values. The given LOCATION is prepended with the 
-current prefix, if set, and is split on the last delimiter. 
+configuration values. The given LOCATION is split on the last delimiter. 
 The resulting section and key are returned as a list.
 
 =cut
@@ -1048,28 +935,15 @@ The resulting section and key are returned as a list.
 sub _get_sect_key {
     my $self = shift;
     my $key  = shift;
-    if ( $self->{prefix} ) {
-        $key = $self->{prefix} . $delimiter . $key;
-    }
 
     # Config::Std uses section/key, so we need to split up the
     # given key
 
-    my @tokens = split( $delimiter_regex, $key );
+    my @tokens = split( $self->delimiter_regex(), $key );
     $key = pop @tokens;
-    my $sect = join( $delimiter, @tokens );
+    my $sect = join( $self->delimiter(), @tokens );
 
     return $sect, $key;
-}
-
-=head2 _read_options()
-
-Called during init(), this method reads the actual configuration values
-and populates the internal data structure.
-
-=cut
-
-sub _read_options {
 }
 
 =head2 _which( NAME, DIR ... )
@@ -1128,19 +1002,13 @@ sub _debugtree {
     my $self   = shift;
     my $start  = shift;
     my $indent = shift || 0;
-    my $cfg    = $Config::Versioned::git;
+    my $cfg    = $self->_git();
     my @out    = ();
 
     my $tabsize = 2;
     my $obj;
 
-    if ($debug) {
-
-        #        warn "# Entered _debugtree( $start, ", $indent || 0, ")\n";
-    }
-
     # Soooo, let's see what we've been fed...
-
     if ( not $start ) {    # default to the HEAD of master
         if ( $cfg->all_sha1s->all ) {
             my $master = $cfg->ref('refs/heads/master');
@@ -1201,7 +1069,8 @@ sub _debugtree {
 
     if ( $obj->kind eq 'commit' ) {
         foreach my $attr (
-            qw( tree_sha1 parent_sha1s author authored_time committer commited_time comment encoding )
+            qw( tree_sha1 parent_sha1s author authored_time committer
+            commited_time comment encoding )
           )
         {
             if ( $obj->can($attr) ) {
@@ -1218,13 +1087,6 @@ sub _debugtree {
             chomp $_;
             ( ' ' x ( $tabsize * $indent ) ) . $_
         } hdump( $obj->kind . ' ' . $obj->size . "\0" . $obj->content );
-
-   #         my $sha1 = Digest::SHA1->new;
-   #         $sha1->add( $obj->kind . ' ' . $obj->size . "\0" . $obj->content );
-   #
-   #        push @out,
-   #              ( ' ' x ( $tabsize * $indent ) )
-   #              . 'my sha1: '. $sha1->hexdigest;
 
         my $sha1a = Digest::SHA->new;
         $sha1a->add( $obj->kind . ' ' . $obj->size . "\0" . $obj->content );
@@ -1297,7 +1159,7 @@ sub hdump {
 
 =head1 ACKNOWLEDGEMENTS
 
-Based on the CPAN module App::Options.
+Was based on the CPAN module App::Options, but since been converted to Moose.
 
 =head1 AUTHOR
 
@@ -1349,6 +1211,8 @@ This program is free software; you can redistribute it
 and/or modify it under the same terms as Perl itself.
 
 =cut
+
+__PACKAGE__->meta->make_immutable;
 
 1;    # End of Config::Versioned
 
