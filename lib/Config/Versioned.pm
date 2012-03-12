@@ -35,7 +35,7 @@ use Path::Class;
 has 'path' => ( is => 'ro', isa => 'ArrayRef', default => sub { [qw( . )] } );
 has 'filename' => ( is => 'ro', isa => 'Str' );
 has 'dbpath' =>
-  ( is => 'ro', isa => 'Str', default => 'cfgver.git', required => 1 );
+  ( is => 'ro', default => 'cfgver.git', required => 1 );
 has 'author_name' => ( is => 'ro', isa => 'Str', default => "process: $@" );
 has 'author_mail' => (
     is      => 'ro',
