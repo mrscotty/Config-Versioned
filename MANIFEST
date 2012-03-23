@@ -25,6 +25,7 @@ t/01-initdb-2.conf
 t/01-initdb-3.conf
 t/01-initdb.conf
 t/01-initdb.t
+t/02-no-db.t
 t/02-readonly.t
 t/03-subclass.t
 t/04-parser.t
@@ -35,5 +36,9 @@ t/06-cfgver.t
 t/07-cfgexp.t
 t/08-sha.d/port.yaml
 t/08-sha.t
+t/09-symlink-2.conf
+t/09-symlink-3.conf
+t/09-symlink.conf
+t/09-symlink.t
 t/pod-coverage.t
 t/pod.t
