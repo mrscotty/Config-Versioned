@@ -26,6 +26,7 @@ recommends:
   Config::Merge: 0
   YAML::XS: 0
 requires:
+  Config::Std: 0
   Git::PurePerl: 0
 resources:
   license: http://dev.perl.org/licenses/
