@@ -1,6 +1,7 @@
 bin/cfgver
-build.txt
+build.mkd
 Changes
+commands
 inc/Module/AutoInstall.pm
 inc/Module/Install.pm
 inc/Module/Install/AutoInstall.pm
@@ -15,9 +16,8 @@ inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
 lib/Config/Versioned.pm
 Makefile.PL
-MANIFEST
+MANIFEST			This list of files
 META.yml
-pm_to_blib
 README
 t/00-load.conf
 t/00-load.t
