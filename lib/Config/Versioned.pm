@@ -19,11 +19,11 @@ Config::Versioned - Simple, versioned access to configuration data
 
 =head1 VERSION
 
-Version 0.5
+Version 0.6
 
 =cut
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 
 use Carp;
 use Config::Std;
@@ -1168,7 +1168,11 @@ Was based on the CPAN module App::Options, but since been converted to Moose.
 
 =head1 AUTHOR
 
-Scott T. Hardin, C<< <mrscotty at hnsc.de> >>
+Scott T. Hardin, C<< <mrscotty at cpan.org> >>
+
+Martin Bartosch
+
+Oliver Welter
 
 =head1 BUGS
 
