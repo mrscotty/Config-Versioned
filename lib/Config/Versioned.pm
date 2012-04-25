@@ -880,6 +880,11 @@ sub _findobjx {
     while (@keys) {
         my $key = shift @keys;
 
+        # if the object is a blob, we already reached the leaf
+        if ($obj->kind eq 'blob') {
+            return undef;
+        }
+
         # $obj should contain the parent tree object.
 
         my @directory_entries = $obj->directory_entries;
