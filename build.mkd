@@ -1,3 +1,8 @@
+# TODO
+
+Move this documentation to the 'commands' script so that everything is
+self-documenting.
+
 # Overview
 
 This document describes how to build, test and package this module.
