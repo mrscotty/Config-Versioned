@@ -17,13 +17,9 @@ use namespace::autoclean;
 
 Config::Versioned - Simple, versioned access to configuration data
 
-=head1 VERSION
-
-Version 0.6
-
 =cut
 
-our $VERSION = '0.6';
+our $VERSION = '0.7';
 
 use Carp;
 use Config::Std;
@@ -483,6 +479,10 @@ sub version {
 Initializes the internal git repository used for storing the config
 values. 
 
+If the I<objects> directory in the C<dbpath> does not exist, an
+C<init()> on the C<Git::PurePerl> class is run. Otherwise, the 
+instance is initialized using the existing bare repository.
+
 On error, it returns C<undef> and the reason is in C<$@>.
 
 =cut
@@ -496,10 +496,12 @@ sub _init_repo {
     #        die "ERROR: dbpath not set";
     #    }
 
-    if ( not -d $self->dbpath() ) {
+    if ( not -d $self->dbpath() . '/objects' ) {
         if ( $self->filename() || $self->autocreate() ) {
-            if ( not dir( $self->dbpath() )->mkpath ) {
-                die 'Error creating directory ' . $self->dbpath() . ': ' . $!;
+            if ( not -d $self->dbpath() ) {
+                if ( not dir( $self->dbpath() )->mkpath ) {
+                    die 'Error creating directory ' . $self->dbpath() . ': ' . $!;
+                }
             }
             $git = Git::PurePerl->init( gitdir => $self->dbpath() );
         } else {

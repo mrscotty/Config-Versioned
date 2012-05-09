@@ -5,11 +5,12 @@
 ##
 ## vim: syntax=perl
 
-use Test::More tests => 19;
+use Test::More tests => 22;
 
 use strict;
 use warnings;
 my $gittestdir = qw( t/01-initdb.git );
+my $gittestdir2 = qw( t/01-initdb-2.git );
 
 my $ver1 = '7dd8415a7e1cd131fba134c1da4c603ecf4974e2';
 my $ver2 = 'a573e9bbcaeed0be9329b25e2831a930f5b656ca';
@@ -109,4 +110,32 @@ is_deeply( \@attrlist, [ sort(qw( uri user password )) ], "check attr list" );
 
 is( $cfg->kind('group1.ldap1'), 'tree', 'kind() returns tree');
 is( $cfg->kind('group1.ldap1.user'), 'blob', 'kind() returns blob');
+
+# When installing our app that depends on Config::Versioned, we like to
+# deliver the empty bare repo directory so it has the correct permissions.
+# Currently, the initdb fails when this already exists, so we need some
+# sort of force option.
+dir($gittestdir2)->rmtree;
+mkdir $gittestdir2;
+
+ok(-d $gittestdir2, "Check that $gittestdir2 exists");
+
+eval {
+    my $cfg = Config::Versioned->new(
+        {
+            dbpath      => $gittestdir2,
+            autocreate  => 1,
+            filename    => '01-initdb.conf',
+            path        => [qw( t )],
+            commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+            author_name => 'Test User',
+            author_mail => 'test@example.com',
+        }
+    );
+    1;
+};
+is($@, "", "Results of eval for new() instance");
+
+ok( $cfg, 'create new config instance for second dir' );
+
 
