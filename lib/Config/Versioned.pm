@@ -391,17 +391,13 @@ sub dumptree {
     # If no version hash was given, default to the HEAD of master
 
     if ( not $version ) {
-        if ( $cfg->all_sha1s->all ) {
-            my $master = $cfg->ref('refs/heads/master');
-            if ( not $master ) {
-                die "ERR: no master object found";
-            }
+        my $master = $self->_git()->ref('refs/heads/master');
+        if ( $master ) {
             $version = $master->sha1;
+        } else {
+            # if no sha1s are in repo, there's nothing to return
+            return;
         }
-        else {
-            return;    # if no sha1s are in repo, there's nothing to return
-        }
-
     }
 
     my $obj = $cfg->get_object($version);
@@ -662,11 +658,8 @@ sub commit {
     my $parent = undef;
     my $master = undef;
 
-    if ( $self->_git()->all_sha1s->all ) {
-        $master = $self->_git()->ref('refs/heads/master');
-        if ( not $master ) {
-            die "ERR: no master object found";
-        }
+    $master = $self->_git()->ref('refs/heads/master');
+    if ( $master ) {
         $parent = $master->sha1;
     }
 
@@ -848,15 +841,10 @@ sub _findobjx {
     # If no version hash was given, default to the HEAD of master
 
     if ( not $ver ) {
-        if ( $self->_git()->all_sha1s->all ) {
-            my $master = $self->_git()->ref('refs/heads/master');
-            if ( not $master ) {
-                die "ERR: no master object found";
-            }
+        my $master = $self->_git()->ref('refs/heads/master');
+        if ( $master ) {
             $ver = $master->sha1;
-        }
-        else {
-
+        } else {
             # if no sha1s are in repo, there's nothing to return
             return;
         }
@@ -1017,11 +1005,8 @@ sub _debugtree {
 
     # Soooo, let's see what we've been fed...
     if ( not $start ) {    # default to the HEAD of master
-        if ( $cfg->all_sha1s->all ) {
-            my $master = $cfg->ref('refs/heads/master');
-            if ( not $master ) {
-                die "ERR: no master object found";
-            }
+        my $master = $cfg->ref('refs/heads/master');
+        if ( $master ) {
             $obj = $cfg->get_object( $master->sha1 );
         }
         else {
