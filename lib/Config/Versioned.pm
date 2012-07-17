@@ -734,6 +734,9 @@ sub _hash2tree {
                 warn "# _hash2tree() adding subtree for $key\n";
             }
             my $subtree = $self->_hash2tree( $hash->{$key} );
+             
+            next unless($subtree);
+
             my $de      = Git::PurePerl::NewDirectoryEntry->new(
                 mode     => '40000',
                 filename => $key,
@@ -758,7 +761,7 @@ sub _hash2tree {
             );
             push @dir_entries, $de;
         }
-        else {
+        elsif ( defined $hash->{$key} ) {
             my $obj =
               Git::PurePerl::NewObject::Blob->new( content => $hash->{$key} );
             $self->_git()->put_object($obj);
@@ -768,8 +771,16 @@ sub _hash2tree {
                 sha1     => $obj->sha1,
             );
             push @dir_entries, $de;
+        } else {
+            warn "#  _hash2tree() value is undef for key $key\n";
         }
     }
+
+    if (!scalar @dir_entries) {
+        warn "# _hash2tree() nothing to push\n";
+        return undef;
+    }
+
     my $tree =
       Git::PurePerl::NewObject::Tree->new( directory_entries =>
           [ sort { $a->filename cmp $b->filename } @dir_entries ] );
