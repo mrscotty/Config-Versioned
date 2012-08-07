@@ -2,6 +2,12 @@
 #
 # vim: syntax=perl
 
+BEGIN {
+    use vars qw( $req_cm_err );
+    eval 'require Config::Merge;';
+    $req_cm_err = $@;
+}
+
 use Test::More tests => 3;
 
 use strict;
@@ -56,5 +62,8 @@ is( `$cfgexp --dbpath $gittestdir`,
 is( `$cfgexp --dbpath $gittestdir --format text --version $ver1`,
     $out_text_v1, 'output of initial text' );
 
+SKIP: {
+    skip "Config::Merge not installed", 1 if $req_cm_err;
 is( `$cfgexp --dbpath $gittestdir2 --format text db.hosts`,
     $out_text_t2_v1, 'output of array' );
+}

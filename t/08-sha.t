@@ -79,7 +79,7 @@ sub cm2tree {
 package main;
 
 SKIP: {
-    skip "Config::Merge not installed", 5 if $req_cm_err;
+    skip "Config::Merge not installed", 3 if $req_cm_err;
     my $cfg = MyConfig->new( {
     dbpath      => $gitdb,
     commit_time => DateTime->from_epoch( epoch => 1240341682 ),
