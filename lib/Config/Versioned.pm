@@ -19,7 +19,7 @@ Config::Versioned - Simple, versioned access to configuration data
 
 =cut
 
-our $VERSION = '0.9';
+our $VERSION = '0.10';
 
 use Carp;
 use Config::Std;
@@ -737,10 +737,15 @@ sub _hash2tree {
              
             next unless($subtree);
 
+            my $local_key = $key;
+            if ( $] > 5.007 && utf8::is_utf8($local_key) ) {
+                utf8::downgrade($local_key);
+            }
+
             my $de      = Git::PurePerl::NewDirectoryEntry->new(
                 mode     => '40000',
-                filename => $key,
-                sha1     => $subtree->sha1,
+                filename => $local_key,
+                sha1     => $subtree->sha1(),
             );
             push @dir_entries, $de;
         }
@@ -754,21 +759,33 @@ sub _hash2tree {
               Git::PurePerl::NewObject::Blob->new(
                 content => ${ $hash->{$key} } );
             $self->_git()->put_object($obj);
+            my $local_key = $key;
+            if ( $] > 5.007 && utf8::is_utf8($local_key) ) {
+                utf8::downgrade($local_key);
+            }
             my $de = Git::PurePerl::NewDirectoryEntry->new(
                 mode     => '120000',     # symlink
-                filename => $key,
-                sha1     => $obj->sha1,
+                filename => $local_key,
+                sha1     => $obj->sha1(),
             );
             push @dir_entries, $de;
         }
         elsif ( defined $hash->{$key} ) {
             my $obj =
               Git::PurePerl::NewObject::Blob->new( content => $hash->{$key} );
+
+            my $local_key = $key;
+            if ( $] > 5.007 && utf8::is_utf8($local_key) ) {
+                utf8::downgrade($local_key);
+            }
+
+            warn "# created blob for '$key' with sha " . $obj->sha1() if $self->debug();
+            warn "#      '$key' utf8 flag: ", utf8::is_utf8($key) if $self->debug();
             $self->_git()->put_object($obj);
             my $de = Git::PurePerl::NewDirectoryEntry->new(
                 mode     => '100644',     # plain file
-                filename => $key,
-                sha1     => $obj->sha1,
+                filename => $local_key,
+                sha1     => $obj->sha1(),
             );
             push @dir_entries, $de;
         } else {

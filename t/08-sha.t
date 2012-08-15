@@ -14,7 +14,7 @@ BEGIN {
     $req_cm_err = $@;
 }
 
-use Test::More tests => 3;
+use Test::More tests => 6;
 use DateTime;
 use Path::Class;
 use Data::Dumper;
@@ -22,12 +22,15 @@ use Carp qw(confess);
 
 my $ver1 = '777fd3790995c010b20a9d7af47ec4d72d472b3e';
 
-my $gitdb  = 't/08-sha.git';
-my $cfgdir = 't/08-sha.d';
+my $gitdb1   = 't/08-sha-1.git';
+my $cfgdata1 = 't/08-sha-1.conf';
+my $gitdb2   = 't/08-sha-2.git';
+my $cfgdir2   = 't/08-sha-2.d';
 
-dir($gitdb)->rmtree;
+dir($gitdb1)->rmtree;
+dir($gitdb2)->rmtree;
 
-package MyConfig;
+package MyConfig2;
 
 use Moose;
 
@@ -40,12 +43,12 @@ sub parser {
     my $params   = shift;
     my $filename = '';
 
-    my $cm    = Config::Merge->new($cfgdir);
+    my $cm    = Config::Merge->new($cfgdir2);
     my $cmref = $cm->();
 
     my $tree = $self->cm2tree($cmref);
 
-    $params->{comment} = 'import from ' . $filename . ' using Config::Merge';
+    $params->{comment} = 'import from  using Config::Merge';
 
     if ( not $self->commit( $tree, $params ) ) {
         die "Error committing import from $filename: $@";
@@ -78,19 +81,34 @@ sub cm2tree {
 
 package main;
 
+my $cfg1 = Config::Versioned->new(
+    {   dbpath      => $gitdb1,
+        autocreate  => 1,
+        filename    => $cfgdata1,
+#        path        => [qw( t )],
+        commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+        author_name => 'Test User',
+        author_mail => 'test@example.com',
+    comment => 'import from  using Config::Merge',  # use this string to match other one we're debugging
+    }
+);
+ok( $cfg1, 'cfg1 - created instance' );
+is( $cfg1->version,           $ver1, 'cfg1 - check version of HEAD' );
+is( $cfg1->get('port.host1'), '123', 'cfg1 - check param port.host1' );
+
 SKIP: {
     skip "Config::Merge not installed", 3 if $req_cm_err;
-    my $cfg = MyConfig->new( {
-    dbpath      => $gitdb,
-    commit_time => DateTime->from_epoch( epoch => 1240341682 ),
-    author_name => 'Test User',
-    author_mail => 'test@example.com',
-    autocreate  => 1,
-}
+    my $cfg2 = MyConfig2->new(
+        {   dbpath      => $gitdb2,
+            commit_time => DateTime->from_epoch( epoch => 1240341682 ),
+            author_name => 'Test User',
+            author_mail => 'test@example.com',
+            autocreate  => 1,
+        }
     );
 
-    ok( $cfg, 'created MyConfig instance' );
-    is( $cfg->version, $ver1, 'check version of HEAD' );
+    ok( $cfg2, 'cfg2 - created instance' );
+    is( $cfg2->version, $ver1, 'cfg2 - check version of HEAD' );
 
-    is( $cfg->get('port.host1'), '123', 'Check param port.host1' );
+    is( $cfg2->get('port.host1'), '123', 'cfg2 - check param port.host1' );
 }
