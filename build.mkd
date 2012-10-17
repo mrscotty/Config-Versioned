@@ -17,7 +17,7 @@ script, most of the test and dist tasks can be automated:
     ./commands info
 
     # Install local version
-    ./commands localinst
+    ./commands install
     ./commands clean
 
     # Test current working tree
