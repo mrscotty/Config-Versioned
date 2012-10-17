@@ -1,3 +1,4 @@
+.travis.yml
 bin/cfgver
 build.mkd
 Changes
@@ -18,6 +19,8 @@ lib/Config/Versioned.pm
 Makefile.PL
 MANIFEST			This list of files
 META.yml
+MYMETA.json
+MYMETA.yml
 README
 t/00-load.conf
 t/00-load.t
@@ -34,8 +37,8 @@ t/05-config-merge.d/local.yaml
 t/05-config-merge.t
 t/06-cfgver.t
 t/07-cfgexp.t
-t/08-sha.conf
-t/08-sha.d/port.yaml
+t/08-sha-1.conf
+t/08-sha-2.d/port.yaml
 t/08-sha.t
 t/09-symlink-2.conf
 t/09-symlink-3.conf
