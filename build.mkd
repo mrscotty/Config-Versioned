@@ -27,8 +27,20 @@ script, most of the test and dist tasks can be automated:
     ./commands distcheck
 
     # To do the whole release (clean, test, dist, distcheck, tag, push, upload)
+    # Note: use this when _not_ using gitflow.
     ./commands release
 
+    # To do the release with gitflow (be sure to bump versions in source!)
+    ./commands clean test dist distcheck
+    git flow release finish <RELNUM>
+    git flow release publish origin
+
+# Troubleshooting
+
+## ./commands distcheck
+
+If the distcheck fails with "No such file: ...", the file is still in the MANIFEST, but
+probably has been removed or renamed in the distribution.
 
 # Old Notes
 
