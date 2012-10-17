@@ -33,7 +33,7 @@ script, most of the test and dist tasks can be automated:
     # To do the release with gitflow (be sure to bump versions in source!)
     ./commands clean test dist distcheck
     git flow release finish <RELNUM>
-    git flow release publish origin
+    git push --tags origin master
 
 # Troubleshooting
 
