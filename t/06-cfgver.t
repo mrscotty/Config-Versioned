@@ -17,11 +17,11 @@ if ( not -d $gittestdir ) {
     die "Test repo not found - did you run 01-initdb.t already?";
 }
 
-my $result = `$cfgver --dbpath $gittestdir`;
+my $result = `$^X $cfgver --dbpath $gittestdir`;
 chomp $result;
 is( $result, $ver3, 'show current version' );
 
-my $result1 = `$cfgver --dbpath $gittestdir --version $ver1`;
+my $result1 = `$^X $cfgver --dbpath $gittestdir --version $ver1`;
 chomp $result1;
 is( $result1, $ver1, 'show initial version' );
 
