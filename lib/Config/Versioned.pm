@@ -289,7 +289,7 @@ sub get {
             "<error: non-blob object '" . $obj->kind . "' not supported>" )
           if $cb;
         warn "# DEBUG: get() was asked to return a non-blob object [kind=",
-          $obj->kind, "]\n";
+          $obj->kind, "]\n" if $self->debug();
         return;
     }
 }
@@ -343,7 +343,7 @@ sub kind {
     else {
         $@ = "Internal object error (expected tree or blob): [gpp kind="
           . $obj->kind . "]\n";
-        warn "# DEBUG: " . $@;
+        warn "# DEBUG: " . $@ if $self->debug();
         return;
     }
 
@@ -789,12 +789,12 @@ sub _hash2tree {
             );
             push @dir_entries, $de;
         } else {
-            warn "#  _hash2tree() value is undef for key $key\n";
+            warn "#  _hash2tree() value is undef for key $key\n" if $self->debug();            
         }
     }
 
     if (!scalar @dir_entries) {
-        warn "# _hash2tree() nothing to push\n";
+        warn "# _hash2tree() nothing to push\n" if $self->debug();;        
         return undef;
     }
 
