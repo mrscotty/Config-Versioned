@@ -13,7 +13,7 @@ use Test::More tests => 3;
 use strict;
 use warnings;
 
-my $cfgexp     = 'perl -Ilib bin/cfgver export';
+my $cfgexp     = "$^X -Ilib bin/cfgver export";
 my $gittestdir = qw( t/01-initdb.git );
 my $gittestdir2 = qw( t/05-config-merge.git );
 my $ver1 = '7dd8415a7e1cd131fba134c1da4c603ecf4974e2';
