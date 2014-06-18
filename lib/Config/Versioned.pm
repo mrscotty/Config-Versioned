@@ -19,7 +19,7 @@ Config::Versioned - Simple, versioned access to configuration data
 
 =cut
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use Carp;
 use Config::Std;
