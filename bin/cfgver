@@ -156,8 +156,8 @@ $params{dbpath} = $opt_dbpath if $opt_dbpath;
 $params{version} = $opt_version if $opt_version;
 
 $params{commit_time} = DateTime->now;
-$params{author_name} = $opt_authorname || $ENV{USER};
-$params{author_mail} = $opt_authormail || $ENV{USER} . '@localhost';
+$params{author_name} = $opt_authorname || $ENV{USER} || $ENV{USERNAME};
+$params{author_mail} = $opt_authormail || ($ENV{USER} || $ENV{USERNAME}). '@localhost';
 
 if ( $command eq 'version' ) {
     my $cfg = Config::Versioned->new( \%params );

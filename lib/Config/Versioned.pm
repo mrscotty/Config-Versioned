@@ -36,7 +36,7 @@ has 'author_name' => ( is => 'ro', isa => 'Str', default => "process: $@" );
 has 'author_mail' => (
     is      => 'ro',
     isa     => 'Str',
-    default => $ENV{GIT_AUTHOR_EMAIL} || $ENV{USER} . '@localhost'
+    default => $ENV{GIT_AUTHOR_EMAIL} || ($ENV{USER} || $ENV{USERNAME}). '@localhost'
 );
 has 'autocreate' => ( is => 'ro', isa => 'Bool', default => 0 );
 has 'commit_time' => ( is => 'ro', isa => 'DateTime' );
